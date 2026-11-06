@@ -1,0 +1,9 @@
+dist
+node_modules
+coverage
+playwright-report
+test-results
+.claude
+.impeccable
+.playwright-cli
+package-lock.json

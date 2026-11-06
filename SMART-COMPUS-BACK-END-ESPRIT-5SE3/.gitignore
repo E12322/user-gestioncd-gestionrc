@@ -1,0 +1,11 @@
+node_modules
+.env
+dist
+# Clés de signature des jetons (secret)
+keys/
+*.pem
+# Autres fichiers d'environnement, clés et sorties de test
+.env.*
+!.env.example
+*.key
+coverage/

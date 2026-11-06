@@ -1,0 +1,23 @@
+/* Design tokens : couleurs (HSL), rayon. Une seule source ; Tailwind les lit via tailwind.config.ts. */
+:root {
+  --background: 210 40% 98%; /* #F8FAFC */
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --primary: 224 64% 33%; /* #1E3A8A */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 19% 35%; /* AA sur blanc et #F8FAFC */
+  --accent: 214 95% 93%;
+  --accent-foreground: 224 64% 33%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 214 32% 91%;
+  --input: 214 32% 85%;
+  --ring: 224 64% 33%;
+  --radius: 0.75rem;
+}

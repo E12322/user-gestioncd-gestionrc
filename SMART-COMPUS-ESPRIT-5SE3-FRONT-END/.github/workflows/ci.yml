@@ -1,0 +1,40 @@
+name: CI
+
+# À chaque push et chaque pull request : mêmes vérifications que celles lancées à la main avant de pousser.
+on:
+  push:
+  pull_request:
+
+# Le robot ne peut que lire le code (moindre privilège).
+permissions:
+  contents: read
+
+# Un nouveau push annule le run précédent de la même branche.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false # le jeton GitHub n'est pas laissé dans .git (inutile ici)
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      # Installation exacte selon package-lock.json (échoue si le lockfile est désynchronisé).
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run format:check
+      - run: npm test
+      # Build de production : sans VITE_USE_MOCKS, il parle au vrai service (jamais en mode démonstration).
+      - run: npm run build
+      # Dépendances de production : échec sur une vulnérabilité haute ou critique.
+      - run: npm audit --omit=dev --audit-level=high
+      # Authenticité : signatures (et attestations de provenance) des paquets installés.
+      - run: npm audit signatures

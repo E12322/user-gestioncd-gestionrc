@@ -1,0 +1,46 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+5 0 obj
+<< /Length 260 >>
+stream
+BT
+/F1 24 Tf
+50 720 Td
+(ESPRIT - Support Academique Officiel) Tj
+/F1 16 Tf
+0 -40 Td
+(Document : pfe book 1.pdf) Tj
+/F1 12 Tf
+0 -30 Td
+(Departement Informatique & Ingenierie) Tj
+0 -25 Td
+(Module : Architecture Logicielle & Microservices) Tj
+0 -40 Td
+(Ce document officiel certifie le contenu pedagogique du cours.) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000010 00000 n 
+0000000059 00000 n 
+0000000116 00000 n 
+0000000230 00000 n 
+0000000305 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+618
+%%EOF

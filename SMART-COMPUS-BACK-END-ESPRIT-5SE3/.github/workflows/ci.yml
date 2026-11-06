@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false # le jeton GitHub n'est pas laissé dans .git (inutile ici)
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      # Dépendances de production : la CI échoue sur une vulnérabilité haute ou critique.
+      - run: npm run audit:prod
+      # Authenticité : chaque paquet installé a une signature (et, si possible, une attestation de provenance) vérifiable.
+      - run: npm audit signatures
+      # Tests unitaires + intégration (MongoDB en mémoire) avec seuils de couverture (lignes 90 %, branches 80 %, fonctions 80 %).
+      - run: npm run test:coverage
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: check
+    services:
+      mongo:
+        image: mongo:7
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false # le jeton GitHub n'est pas laissé dans .git (inutile ici)
+      - run: docker build -t smartcampus-user-service .
+      # Analyse de l'image (Trivy) : paquets du système et dépendances connus vulnérables, secrets oubliés dans les couches.
+      # Échoue sur HIGH/CRITICAL qui ont déjà un correctif disponible (--ignore-unfixed : on ne punit pas ce qu'on ne peut pas corriger).
+      # Trivy écrit un rapport JSON ; un petit script le transforme en annotations lisibles (onglet Actions) et fait échouer l'étape.
+      - name: Analyse de l'image Docker (Trivy)
+        run: |
+          set -euo pipefail
+          if ! docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD":/out aquasec/trivy:0.57.1 image               --severity HIGH,CRITICAL --ignore-unfixed --no-progress --format json --output /out/trivy-image.json smartcampus-user-service; then
+            echo "::error title=Trivy::erreur d'exécution de Trivy (ce n'est pas un constat de vulnérabilité)"; exit 1
+          fi
+          node .github/scripts/trivy-annotations.mjs trivy-image.json
+      # Analyse du Dockerfile (mauvaises pratiques : utilisateur root, absence de HEALTHCHECK, etc.).
+      # Options minimales (le dépôt est fraîchement cloné : pas de node_modules à exclure). En cas d'erreur d'exécution,
+      # les dernières lignes de Trivy sont recopiées dans l'annotation pour que la cause soit lisible sans le journal.
+      - name: Analyse de la configuration Docker (Trivy)
+        run: |
+          set -euo pipefail
+          if ! out=$(docker run --rm -v "$PWD":/w aquasec/trivy:0.57.1 config --severity HIGH,CRITICAL --format json --output /w/trivy-config.json /w 2>&1); then
+            echo "$out"
+            echo "::error title=Trivy config::erreur d'exécution : $(echo "$out" | tail -3 | tr -s '[:space:]' ' ' | cut -c1-250)"; exit 1
+          fi
+          node .github/scripts/trivy-annotations.mjs trivy-config.json
+      # Test de fumée du conteneur réel : démarrage, base, amorçage, sondes, connexion de l'administrateur.
+      - name: Smoke test
+        run: |
+          # GitHub exécute par défaut `bash -e` (SANS pipefail) : on l'active pour que `curl | grep` échoue vraiment.
+          set -euo pipefail
+          docker run -d --name svc --network host \
+            -e MONGODB_URI=mongodb://127.0.0.1:27017/smoke \
+            -e JWT_PRIVATE_KEY="$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 | base64 -w0)" \
+            -e EMAIL_DOMAIN=gmail.com -e FIRST_ADMIN_EMAIL=admin@gmail.com -e FIRST_ADMIN_PASSWORD='Ci-Smoke-2026-Zq7!' \
+            -e METRICS_TOKEN=ci-metrics-token \
+            smartcampus-user-service
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:4001/health && break
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:4001/ready
+          # Clés publiques de vérification : présentes, et aucune partie privée publiée.
+          curl -fsS http://127.0.0.1:4001/.well-known/jwks.json | grep -q '"kty":"RSA"'
+          ! curl -fsS http://127.0.0.1:4001/.well-known/jwks.json | grep -q '"d":'
+          # En production, la documentation de l'API n'est pas exposée.
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4001/docs/)" = "404"
+          curl -fsS -H "Authorization: Bearer ci-metrics-token" http://127.0.0.1:4001/metrics | grep -q http_request_duration_seconds
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4001/metrics)" = "401"
+          curl -fsS -X POST http://127.0.0.1:4001/v1/auth/login -H 'Content-Type: application/json' \
+            -d '{"email":"admin@gmail.com","password":"Ci-Smoke-2026-Zq7!"}' | grep -q '"refreshToken"'
+      - name: Logs du conteneur (en cas d'échec)
+        if: failure()
+        run: |
+          docker logs svc || echo "aucun conteneur svc, l'echec s'est produit avant son demarrage"
