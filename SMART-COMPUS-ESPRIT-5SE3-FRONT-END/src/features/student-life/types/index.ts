@@ -81,3 +81,35 @@ export interface EventInput {
   location: string;
   clubId?: string;
 }
+
+export interface EventRegistration {
+  id: string;
+  eventId: string;
+  eventTitle: string;
+  studentId: string;
+  studentName: string;
+  registeredAt: string;
+}
+
+export interface MemberDetail {
+  memberId: string;
+  memberName: string;
+  memberRole: string;
+  status: MembershipStatus;
+  requestedAt: string;
+  decidedAt?: string;
+}
+
+export interface ClubReport {
+  clubId: string;
+  clubName: string;
+  category: string;
+  year: number;
+  totalMembers: number;
+  confirmedMembers: number;
+  pendingMembers: number;
+  refusedMembers: number;
+  totalEvents: number;
+  events: CampusEvent[];
+  members: MemberDetail[];
+}
