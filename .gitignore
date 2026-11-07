@@ -1,0 +1,33 @@
+# === Node.js (Module 1 + Frontend) ===
+node_modules/
+dist/
+.env
+.env.local
+*.log
+
+# === Java / Maven / Spring Boot (Modules 2 & 3) ===
+target/
+*.class
+*.jar
+*.war
+.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
+
+# === IDE ===
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+.project
+.classpath
+.settings/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Misc ===
+*.bak
+*.tmp
