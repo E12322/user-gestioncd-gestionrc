@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  library-service:
+    build: .
+    container_name: smartcampus-library-service
+    ports:
+      - "8082:8082"
+    environment:
+      - PORT=8082
+      - HOST=0.0.0.0
+      - DATABASE_URL=sqlite:///./library.db
+      - JWT_SECRET=change-me-en-production-32-caracteres-minimum
+      - JWT_ALGORITHM=HS256
+      - JWT_ISSUER=smartcampus-user-service
+      - JWT_AUDIENCE=smartcampus
+    restart: unless-stopped
