@@ -3,7 +3,7 @@ import { useT } from "@/shared/i18n";
 import type { CampusEvent } from "../types";
 
 /** Événement de l'agenda : l'horaire en premier, puis l'intitulé, le lieu et le club organisateur. */
-export function EventCard({ event }: { event: CampusEvent }) {
+export function EventCard({ event, children }: { event: CampusEvent; children?: React.ReactNode }) {
   const t = useT();
   return (
     <li className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-6 py-4">
@@ -24,6 +24,7 @@ export function EventCard({ event }: { event: CampusEvent }) {
           {event.location}
         </p>
         {event.description && <p className="mt-2 max-w-[62ch] text-sm">{event.description}</p>}
+        {children}
       </div>
     </li>
   );

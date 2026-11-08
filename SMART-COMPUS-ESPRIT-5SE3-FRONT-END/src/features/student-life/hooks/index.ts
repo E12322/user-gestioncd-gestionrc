@@ -1,7 +1,17 @@
 import { useMemo } from "react";
 import { useQuery } from "@/shared/api/useQuery";
 import { useAuth } from "@/shared/auth/AuthContext";
-import { getClub, listClubs, listEvents, listMemberships, type Viewer } from "../api";
+import {
+  getClub,
+  getClubReport,
+  listClubMembers,
+  listClubs,
+  listEvents,
+  listMemberships,
+  listMyMemberships,
+  listMyRegistrations,
+  type Viewer,
+} from "../api";
 import type { ClubFilters, EventFilters } from "../types";
 
 /** Identité de l'utilisateur courant, stable entre deux rendus. */
@@ -28,4 +38,24 @@ export function useEvents(filters: EventFilters = {}) {
 export function useMemberships() {
   const viewer = useViewer();
   return useQuery((signal) => listMemberships(viewer, signal), [viewer.role]);
+}
+
+export function useMyMemberships() {
+  const viewer = useViewer();
+  return useQuery((signal) => listMyMemberships(viewer, signal), [viewer.id]);
+}
+
+export function useClubMembers(clubId: string) {
+  const viewer = useViewer();
+  return useQuery((signal) => listClubMembers(clubId, viewer, signal), [clubId, viewer.id]);
+}
+
+export function useClubReport(clubId: string, year: number) {
+  const viewer = useViewer();
+  return useQuery((signal) => getClubReport(clubId, year, viewer, signal), [clubId, year, viewer.id]);
+}
+
+export function useMyRegistrations() {
+  const viewer = useViewer();
+  return useQuery((signal) => listMyRegistrations(viewer, signal), [viewer.id]);
 }
