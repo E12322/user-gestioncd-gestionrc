@@ -77,6 +77,34 @@ export default defineConfig({
         target: "http://localhost:4001",
         changeOrigin: true,
       },
+
+      // Module 6 : Gestion de la Bibliotheque (FastAPI sur 8082)
+      "/books": {
+        target: "http://localhost:8082",
+        changeOrigin: true,
+      },
+      "/loans": {
+        target: "http://localhost:8082",
+        changeOrigin: true,
+      },
+      "/reservations": {
+        target: "http://localhost:8082",
+        changeOrigin: true,
+      },
+
+      // Module 5 : Vie Etudiante (Spring Boot sur 4005)
+      "/clubs": {
+        target: "http://localhost:4005",
+        changeOrigin: true,
+      },
+      "/memberships": {
+        target: "http://localhost:4005",
+        changeOrigin: true,
+      },
+      "/events": {
+        target: "http://localhost:4005",
+        changeOrigin: true,
+      },
     },
   },
 });

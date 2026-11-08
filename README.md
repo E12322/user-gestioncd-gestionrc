@@ -1,70 +1,138 @@
-# 🎓 SmartCampus — Plateforme de gestion du campus
+# SmartCampus - Plateforme integree de gestion du campus
 
-Projet académique — ESPRIT 5SE3 (2026)
-
-## Architecture Microservices
-
-| Module | Technologie | Port | Description |
-|--------|------------|------|-------------|
-| **Module 1** — Utilisateurs & Auth | Node.js / Express / MongoDB | 4001 | Gestion des comptes, rôles, authentification JWT, SMTP |
-| **Module 2** — Gestion Académique | Spring Boot / JPA / H2 | 8081 | Cours, inscriptions, notes, emploi du temps, groupes |
-| **Module 3** — Ressources Campus | Spring Boot / JPA / MySQL | 8080 | Salles, réservations, équipements, interventions |
-| **Module 4** — Résidences | NestJS / TypeORM / PostgreSQL / RabbitMQ | 3001 | Microservices Chambre (3011), Demande (3012), Contrat (3013) + passerelle API (3001, JWT) |
-| **Frontend** | React / Vite / TypeScript | 5173 | Interface utilisateur unifiée multi-rôles |
-
-## Structure du projet
-
-```
-├── SMART-COMPUS-BACK-END-ESPRIT-5SE3/     # Module 1 : User Service (Node.js)
-├── gestionetudiant/                        # Module 2 : Gestion Académique (Spring Boot)
-├── SMART-COMPUS-BACKEND/                   # Module 3 : Gestion Ressources (Spring Boot)
-├── backend-residences/                     # Module 4 : Résidences — 4 microservices NestJS + RabbitMQ (dossier unique, npm workspaces)
-├── docs/                                   # Documentation technique du module Résidences
-├── SMART-COMPUS-ESPRIT-5SE3-FRONT-END/     # Frontend React
-├── convert_pptx.ps1                        # Utilitaire conversion PPTX
-└── parse_pptx.mjs                          # Utilitaire parsing PPTX
-```
-
-## Démarrage rapide
-
-### Prérequis
-- **Node.js** 18+ et npm
-- **Java** 17+ et Maven
-- **MongoDB** (service Windows)
-- **MySQL** via XAMPP (port 3307)
-- **PostgreSQL** 16 (service Windows ou Docker) — Module 4 Résidences (base `smartcampus`, un schéma par service : `BDD_Chambres`, `BDD_Demandes`, `BDD_Contrats`)
-- **RabbitMQ** (service Windows ou Docker, UI : http://localhost:15672) — Module 4 Résidences (file durable `residences.contrats.events`)
-
-### Lancement
-
-```bash
-# 1. Module 1 — User Service
-cd SMART-COMPUS-BACK-END-ESPRIT-5SE3
-npm install && npm run dev
-
-# 2. Module 2 — Gestion Académique
-cd gestionetudiant
-./mvnw spring-boot:run
-
-# 3. Module 3 — Gestion Ressources
-cd SMART-COMPUS-BACKEND
-./mvnw spring-boot:run
-
-# 4. Module 4 — Résidences (4 microservices NestJS + passerelle + RabbitMQ)
-cd backend-residences
-npm install && npm run seed && npm run start:dev   # passerelle :3001 · chambres :3011 · demandes :3012 · contrats :3013
-# Le seed passe par l'API de la passerelle (données de démo + preuve d'intégration).
-# Microservices séparés, file durable RabbitMQ, JWT vérifié à la passerelle.
-
-# 5. Frontend
-cd SMART-COMPUS-ESPRIT-5SE3-FRONT-END
-npm install && npm run dev
-```
-
-## Équipe
-
-- **Eya Touahri** — Module 3 (Gestion des Ressources Campus)
-- **Ahlem Guesmi** — Module 2 (Gestion Académique / Étudiant)
+Projet academique d'architecture microservices - ESPRIT 5SE3 (2026).
 
 ---
-© 2026 SmartCampus — ESPRIT 5SE3
+
+## 1. Vue d'ensemble de l'architecture
+
+SmartCampus centralise l'ensemble des activites administratives, pedagogiques et associatives du campus universitaire au sein d'une architecture distribuée composed de plusieurs microservices autonomes :
+
+| Module | Responsabilite | Technologie | Port | Persistance & Communication |
+|---|---|---|---|---|
+| **Module 1 : Utilisateurs & Auth** | Authentification JWT, comptes, roles, securite | Node.js / Express | 4001 | MongoDB, JWT RS256/HS256, SMTP |
+| **Module 2 : Academique** | Cours, notes, absences, groupes, plannings | Spring Boot / JPA | 8081 | Base H2 / PostgreSQL |
+| **Module 3 : Ressources Campus** | Salles, reservations, equipements, incidents | Spring Boot / JPA | 8080 | Base MySQL |
+| **Module 4 : Residences** | Chambres, demandes d'hebergement, contrats | NestJS (3 microservices + Gateway) | 3001 | PostgreSQL, RabbitMQ |
+| **Module 5 : Vie Etudiante** | Clubs, adhesions, evenements, inscriptions | Spring Boot / JPA | 4005 | MongoDB / H2 |
+| **Module 6 : Bibliotheque** | Catalogue, prets, regles de quotas, retards, reservations | Python / FastAPI / SQLAlchemy | 8082 | SQLite / PostgreSQL, Eureka, RabbitMQ |
+| **Frontend** | Interface web unifiee responsive multi-roles | React / Vite / TypeScript | 5173 | Client HTTP unique, JWT, Tailwind |
+
+---
+
+## 2. Structure du repository
+
+```text
+Microservices/
+├── SMART-COMPUS-BACK-END-ESPRIT-5SE3/     # Module 1 : Utilisateurs & Auth (Node.js Express :4001)
+├── gestionetudiant/                        # Module 2 : Gestion Academique (Spring Boot :8081)
+├── SMART-COMPUS-BACKEND/                   # Module 3 : Ressources Campus (Spring Boot :8080)
+├── backend-residences/                     # Module 4 : Residences (NestJS Gateway :3001 & Services)
+├── vie-etudiante/                          # Module 5 : Vie Etudiante (Spring Boot :4005)
+├── gestion-bibliotheque/                   # Module 6 : Gestion Bibliotheque (Python FastAPI :8082)
+├── SMART-COMPUS-ESPRIT-5SE3-FRONT-END/     # Frontend React (Vite :5173)
+└── docs/                                   # Documentation et schemas d'architecture
+```
+
+---
+
+## 3. Communication inter-services & flux metier
+
+1. **Authentification & Identite unifiee :**
+   - Le microservice Utilisateurs delivre les jetons JWT contenant les revendications (`sub`, `role`, `name`).
+   - Chaque microservice valide le jeton et adapte les autorisations selon le role (`student`, `teacher`, `admin`).
+2. **Routage :**
+   - Le frontend dispose d'un routeur centralise capable de dialoguer directement avec chaque microservice ou a travers la passerelle API.
+3. **Evenements asynchrones :**
+   - Publication d'evenements metier (`LivreEmprunte`, `LivreRetourne`, `ChambreAttribuee`, `AdhesionValidee`) facilitant la synchronisation sans couplage fort.
+4. **Decouverte de services :**
+   - Enregistrement configurable aupres du registre Eureka (`http://localhost:8761/eureka`).
+
+---
+
+## 4. Guide de demarrage
+
+### Prerequis
+- **Node.js** 18+ et npm
+- **Python** 3.10+
+- **Java** 17+ et Maven
+- **MongoDB**, **MySQL** ou **PostgreSQL** selon les modules lances
+
+### Demarrage des microservices
+
+#### Module 1 : Utilisateurs (Node.js)
+```bash
+cd SMART-COMPUS-BACK-END-ESPRIT-5SE3
+npm install
+npm run dev
+```
+
+#### Module 2 : Academique (Spring Boot)
+```bash
+cd gestionetudiant
+./mvnw spring-boot:run
+```
+
+#### Module 3 : Ressources Campus (Spring Boot)
+```bash
+cd SMART-COMPUS-BACKEND
+./mvnw spring-boot:run
+```
+
+#### Module 4 : Residences (NestJS)
+```bash
+cd backend-residences
+npm install
+npm run start:dev
+```
+
+#### Module 5 : Vie Etudiante (Spring Boot)
+```bash
+cd vie-etudiante
+./mvnw spring-boot:run
+```
+
+#### Module 6 : Bibliotheque (Python FastAPI)
+```bash
+cd gestion-bibliotheque
+# Sous Windows :
+.\demarrer-backend.cmd
+
+# Ou manuellement :
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn app.main:app --port 8082 --reload
+```
+Documentation Swagger du microservice bibliotheque accessible sur : `http://localhost:8082/docs`.
+
+#### Frontend (React / Vite)
+```bash
+cd SMART-COMPUS-ESPRIT-5SE3-FRONT-END
+npm install
+npm run dev
+```
+Interface accessible sur : `http://localhost:5173`.
+
+---
+
+## 5. Tests et validation qualite
+
+- **Bibliotheque :**
+  ```bash
+  cd gestion-bibliotheque
+  pytest
+  ```
+- **Residences :**
+  ```bash
+  cd backend-residences
+  npm test
+  ```
+- **Frontend :**
+  ```bash
+  cd SMART-COMPUS-ESPRIT-5SE3-FRONT-END
+  npm run build
+  ```
+
+---
+ESPRIT 5SE3 - Projet Microservices

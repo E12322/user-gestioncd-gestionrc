@@ -48,6 +48,11 @@ const SERVICE_ROUTES: ReadonlyArray<{ prefixes: string[]; baseUrl: string }> = [
     prefixes: ["/chambres", "/demandes", "/contrats"],
     baseUrl: import.meta.env.VITE_RESIDENCES_API_BASE_URL ?? "http://localhost:3001/api",
   },
+  // Bibliotheque (Python / FastAPI sur 8082) : /books, /loans, /reservations -> LIBRARY_API_BASE_URL
+  {
+    prefixes: ["/books", "/loans", "/reservations"],
+    baseUrl: import.meta.env.VITE_LIBRARY_API_BASE_URL ?? "http://localhost:8082",
+  },
 ];
 
 const baseUrlFor = (path: string): string => {
