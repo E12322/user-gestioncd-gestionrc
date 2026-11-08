@@ -59,6 +59,7 @@ const seedUsers = (): UserAccount[] => [
   mk("ADM-0004", "Tarek", "Bouaziz", "admin", { last: 20, created: 24 * 1300 }),
   // Compte administrateur personnel pour les essais (mot de passe : DEMO_PASSWORD).
   mk("ADM-0009", "Fara", "Yaich", "admin", { last: 1, created: 24 * 30, email: "yaichfara1@gmail.com" }),
+  mk("ADM-0000", "Admin", "SmartCampus", "admin", { last: 1, created: 24 * 365, email: "admin@gmail.com" }),
 ];
 
 export const PERMISSIONS: PermissionDef[] = [
@@ -167,7 +168,7 @@ users.forEach((u) => {
 /** « Base de données » en mémoire du user-service fictif : reste cohérente pendant toute la session. */
 export const db = {
   users,
-  passwords: new Map<string, string>(),
+  passwords: new Map<string, string>([["admin@gmail.com", "Admin2026!"]]),
   permissions: buildMatrix(),
   history: seedHistory(users),
   seq: 300,
