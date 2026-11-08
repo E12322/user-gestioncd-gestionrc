@@ -1,19 +1,50 @@
+import json
 import logging
 import smtplib
 from email.mime.text import MIMEText
-from app.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM
+from app.config import (
+    SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM,
+    RABBITMQ_ENABLED, RABBITMQ_URL, RABBITMQ_EXCHANGE
+)
 
 logger = logging.getLogger("smartcampus.library")
 logging.basicConfig(level=logging.INFO)
 
-def publish_domain_event(event_name: str, payload: str):
+def publish_to_rabbitmq(routing_key: str, payload_dict: dict):
+    """Publication asynchrone sécurisée sur RabbitMQ si activé."""
+    if not RABBITMQ_ENABLED:
+        return
+    try:
+        import pika
+        parameters = pika.URLParameters(RABBITMQ_URL)
+        connection = pika.BlockingConnection(parameters)
+        channel = connection.channel()
+        channel.exchange_declare(exchange=RABBITMQ_EXCHANGE, exchange_type="topic", durable=True)
+        message = json.dumps(payload_dict)
+        channel.basic_publish(
+            exchange=RABBITMQ_EXCHANGE,
+            routing_key=routing_key,
+            body=message,
+            properties=pika.BasicProperties(
+                delivery_mode=2,  # Rendre le message persistant
+                content_type="application/json"
+            )
+        )
+        connection.close()
+        logger.info(f"[RABBITMQ] Published '{routing_key}': {message}")
+    except Exception as e:
+        logger.warning(f"[RABBITMQ] Échec de publication non-bloquante: {e}")
+
+def publish_domain_event(event_name: str, payload: str, details: dict = None):
     """
     Publication d'un événement de domaine métier :
     - LivreEmprunté
     - LivreRetourné
-    Journalisé pour la traçabilité et prêt pour le bus RabbitMQ / Outbox.
+    Journalisé pour l'audit et routé vers le bus d'événements RabbitMQ.
     """
     logger.info(f"[DOMAIN_EVENT] service=library-service event={event_name} payload=\"{payload}\"")
+    data = {"service": "library-service", "event": event_name, "summary": payload, "details": details or {}}
+    publish_to_rabbitmq(f"library.event.{event_name.lower()}", data)
 
 def send_notification_email(recipient_email: str, subject: str, body: str):
     """

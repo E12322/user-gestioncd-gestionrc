@@ -2,6 +2,20 @@
 
 Microservice backend en **Python / FastAPI / SQLAlchemy** pour la plateforme **SmartCampus** (ESPRIT 5SE3).
 
+## Architecture Microservices & Écosystème
+
+| Composant | Rôle & Intégration |
+|---|---|
+| **Framework** | **FastAPI** (Python 3.11) + Uvicorn (ASGI haute performance) |
+| **Persistance** | **SQLAlchemy ORM** + SQLite (zéro config) / PostgreSQL / MySQL |
+| **Service Discovery** | **Netflix Eureka Client** (`py-eureka-client`) pour découverte dynamique via Spring Cloud Eureka Server (`http://localhost:8761/eureka`) |
+| **API Gateway** | Compatible routage direct via API Gateway (Spring Cloud Gateway / NestJS Gateway / Kong) ou reverse-proxy Vite |
+| **Message Broker** | **RabbitMQ** (AMQP via `pika`) avec topic exchange `smartcampus.events` pour les événements métier |
+| **Sécurité** | Validation JWT (`python-jose`), contrôle d'accès RBAC (`student`, `teacher`, `admin`), support headers Gateway (`X-User-Id`, `X-User-Role`) |
+| **Notifications** | Intégration SMTP (Mailpit / Mailhog) pour alertes de retard |
+
+---
+
 ## Fonctionnalités Métier
 
 - **Catalogue & Recherche :** Consultation du catalogue, filtres de recherche (titre, auteur, ISBN, catégorie), calcul dynamique des exemplaires disponibles et en attente.
@@ -13,12 +27,9 @@ Microservice backend en **Python / FastAPI / SQLAlchemy** pour la plateforme **S
   - Réservation possible dès épuisement des exemplaires disponibles (`available == 0`).
   - Notification et passage automatique de la 1ère réservation en statut `ready` lors du retour d'un exemplaire.
   - Consommation prioritaire de la réservation lors de l'emprunt.
-- **Sécurité & Authentification :**
-  - Vérification des jetons JWT émis par le module Utilisateurs (`user-service`).
-  - Contrôle des accès par rôles (routes réservées aux administrateurs pour la gestion des prêts, retours et ajouts au catalogue).
-- **Événements de domaine & Notifications :**
-  - Publication des événements métier `LivreEmprunté` et `LivreRetourné`.
-  - Intégration SMTP pour alertes de retards.
+- **Événements de domaine publiés :**
+  - `LivreEmprunté`
+  - `LivreRetourné`
 
 ---
 
@@ -66,5 +77,9 @@ pytest
 | `DATABASE_URL` | `sqlite:///./library.db` | URL de la base de données |
 | `JWT_SECRET` | `change-me-en-production-32-caracteres-minimum` | Secret partagé JWT |
 | `USER_SERVICE_URL` | `http://localhost:4001` | URL du microservice User |
+| `EUREKA_SERVER` | `http://localhost:8761/eureka` | URL du serveur Eureka |
+| `EUREKA_ENABLED` | `false` | Activer l'enregistrement automatique Eureka |
+| `RABBITMQ_URL` | `amqp://guest:guest@localhost:5672/` | URL de connexion RabbitMQ |
+| `RABBITMQ_ENABLED` | `false` | Activer la publication RabbitMQ |
 | `SMTP_HOST` | `localhost` | Serveur SMTP |
 | `SMTP_PORT` | `1025` | Port SMTP (Mailpit / Mailhog) |
