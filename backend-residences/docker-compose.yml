@@ -1,0 +1,88 @@
+# SmartCampus - Residences : stack complete (machines equipees de Docker).
+# Local (Windows + services natifs) : PostgreSQL et RabbitMQ via Chocolatey,
+# puis `npm run start:dev` a la racine de backend-residences/.
+#
+# Ports : gateway 3001 | chambres 3011 | demandes 3012 | contrats 3013
+#         PostgreSQL 5432 | RabbitMQ 5672 (UI : http://localhost:15672)
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: smartcampus
+    ports:
+      - '5432:5432'
+    volumes:
+      - residences_pgdata:/var/lib/postgresql/data
+      - ./scripts/init-schema.sql:/docker-entrypoint-initdb.d/init-schema.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  gateway:
+    build: { context: ., dockerfile: apps/gateway/Dockerfile }
+    environment: &appenv
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: smartcampus
+      DB_SYNCHRONIZE: 'true'
+      RABBITMQ_URL: amqp://rabbitmq:5672
+      RABBITMQ_QUEUE: residences.contrats.events
+      CHAMBRES_URL: http://chambres:3011
+      DEMANDES_URL: http://demandes:3012
+      CONTRATS_URL: http://contrats:3013
+      JWT_SECRET: change-me-in-production
+      JWT_ISSUER: SmartCampus
+    ports:
+      - '3001:3001'
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+
+  chambres:
+    build: { context: ., dockerfile: apps/chambres/Dockerfile }
+    environment:
+      <<: *appenv
+      CHAMBRES_PORT: '3011'
+      DB_CHAMBRES_SCHEMA: BDD_Chambres
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  demandes:
+    build: { context: ., dockerfile: apps/demandes/Dockerfile }
+    environment:
+      <<: *appenv
+      DEMANDES_PORT: '3012'
+      DB_DEMANDES_SCHEMA: BDD_Demandes
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  contrats:
+    build: { context: ., dockerfile: apps/contrats/Dockerfile }
+    environment:
+      <<: *appenv
+      CONTRATS_PORT: '3013'
+      DB_CONTRATS_SCHEMA: BDD_Contrats
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+volumes:
+  residences_pgdata:

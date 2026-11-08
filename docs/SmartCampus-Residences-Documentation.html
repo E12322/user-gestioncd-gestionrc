@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>SmartCampus — Gestion des Résidences — Documentation technique</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1e293b; font-size: 10.5pt; line-height: 1.5; margin: 0; }
+  h1 { font-size: 24pt; color: #131c3a; margin: 0 0 6px; }
+  h2 { font-size: 15pt; color: #131c3a; border-bottom: 2px solid #7c3aed; padding-bottom: 4px; margin-top: 28px; page-break-after: avoid; }
+  h3 { font-size: 12pt; color: #4c1d95; margin-top: 18px; page-break-after: avoid; }
+  h4 { font-size: 11pt; color: #131c3a; margin: 12px 0 4px; page-break-after: avoid; }
+  p { margin: 6px 0; }
+  code, pre { font-family: Consolas, "Courier New", monospace; font-size: 9pt; }
+  code { background: #f1f5f9; padding: 1px 4px; border-radius: 3px; color: #4c1d95; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 10px 12px; border-radius: 6px; overflow: hidden; white-space: pre-wrap; line-height: 1.35; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 14px; font-size: 9.5pt; page-break-inside: auto; }
+  th { background: #131c3a; color: #fff; text-align: left; padding: 6px 8px; font-weight: 600; }
+  td { border: 1px solid #cbd5e1; padding: 5px 8px; vertical-align: top; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .cover { background: linear-gradient(135deg, #131c3a 0%, #4c1d95 60%, #7c3aed 100%); color: #fff; border-radius: 10px; padding: 34px 28px; margin-bottom: 20px; }
+  .cover h1 { color: #fff; }
+  .cover p { color: #ddd6fe; margin: 4px 0; }
+  .tag { display: inline-block; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.4); border-radius: 999px; padding: 2px 12px; font-size: 9pt; margin: 10px 8px 0 0; }
+  .pagebreak { page-break-before: always; }
+  .note { background: #fefce8; border-left: 4px solid #eab308; padding: 8px 12px; border-radius: 0 6px 6px 0; margin: 10px 0; }
+  .ok { background: #f0fdf4; border-left: 4px solid #22c55e; padding: 8px 12px; border-radius: 0 6px 6px 0; margin: 10px 0; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  li { margin: 2px 0; }
+  .muted { color: #64748b; }
+  .small { font-size: 9pt; }
+  .twocol { display: flex; gap: 16px; }
+  .twocol > div { flex: 1; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <p class="muted" style="color:#c4b5fd; letter-spacing:2px; text-transform:uppercase; font-size:9pt;">SmartCampus — Plateforme microservices</p>
+  <h1>Gestion des Résidences</h1>
+  <p>Documentation technique — Backend NestJS (Chambre · Demande · Contrat) &amp; Frontend React</p>
+  <div>
+    <span class="tag">NestJS 10 + TypeORM + PostgreSQL</span>
+    <span class="tag">Vite + React 19 + Tailwind</span>
+    <span class="tag">Swagger / OpenAPI</span>
+    <span class="tag">Event-driven interne</span>
+  </div>
+</div>
+
+<h2>1. Contexte et périmètre</h2>
+<p>Ce document décrit le travail réalisé pour le module <strong>« Gestion des Résidences universitaires »</strong> de la plateforme SmartCampus. Le périmètre couvre :</p>
+<ul>
+  <li><strong>Backend</strong> : une application <strong>NestJS</strong> organisée en trois modules fonctionnels jouant le rôle de microservices logiques — <strong>Chambre</strong> (socle), <strong>Demande</strong> (cycle de vie des demandes), <strong>Contrat</strong> (créé à l'approbation).</li>
+  <li><strong>Frontend</strong> : les pages du module Résidences intégrées à l'application React partagée de l'équipe (routes <code>/residences/*</code>), branchées sur les API ci-dessus.</li>
+  <li><strong>Base de données</strong> : PostgreSQL, schéma dédié <code>BDD_Residences</code>.</li>
+</ul>
+<div class="note"><strong>Point important :</strong> le frontend de l'équipe est une application <strong>Vite + React 19 + React Router</strong> (et non Next.js). Le module Résidences y existait sous forme de maquette 100 % mockée avec un modèle différent (résidences/lits/tickets). Il a été <strong>réécrit pour refléter le contrat réel du backend</strong> (Chambre / Demande / Contrat), tout en conservant le mode démo mocké et le design system existant (navy + violet).</div>
+
+<h2>2. Architecture d'ensemble</h2>
+<pre>
+[ React (Vite) ]
+      │  fetch JSON + JWT (intercepteur partagé)
+      ▼
+[ API Gateway / NestJS  :  http://localhost:3001/api ]
+      │
+      ├── Controllers ──► Services ──► Repositories TypeORM ──► PostgreSQL
+      │                          │                                 schéma "BDD_Residences"
+      │                          │
+      │                          └── EventEmitter2 (bus interne)
+      │                                 ├─ demande.approuvee  ─► ContratsService (crée le contrat)
+      │                                 └─ demande.annulee    ─► ContratsService (résilie le contrat)
+      │
+      └── ChambresService ◄── appelé par DemandesService (occupation) et ContratsService (libération)
+</pre>
+<p>Les trois services partagent la même base (décision validée : « shared DB + injection de services »). Les dépendances s'expriment par <strong>injection de services NestJS</strong> et par <strong>événements de domaine</strong>, ce qui permettra une extraction en microservices HTTP indépendants sans changer les règles métier.</p>
+
+<h2>3. Backend — Phase 1 : Chambre Service</h2>
+<h3>3.1 Entité <code>Chambre</code></h3>
+<table>
+  <tr><th>Champ</th><th>Type</th><th>Contraintes</th></tr>
+  <tr><td><code>id</code></td><td>uuid (PK)</td><td>généré automatiquement</td></tr>
+  <tr><td><code>numero</code></td><td>varchar(50)</td><td>unique par bâtiment</td></tr>
+  <tr><td><code>type</code></td><td>enum</td><td><code>SIMPLE | DOUBLE | STUDIO</code></td></tr>
+  <tr><td><code>capacite</code></td><td>int</td><td>1–4 ; cohérente avec le type (SIMPLE = 1, DOUBLE = 2, STUDIO ≤ 2)</td></tr>
+  <tr><td><code>disponible</code></td><td>boolean</td><td>défaut <code>true</code></td></tr>
+  <tr><td><code>batiment</code></td><td>varchar(100)</td><td>contrainte d'unicité <code>(batiment, numero)</code></td></tr>
+  <tr><td><code>etage</code></td><td>int</td><td>≥ 0</td></tr>
+  <tr><td><code>createdAt / updatedAt</code></td><td>timestamptz</td><td>audit automatique</td></tr>
+</table>
+<h3>3.2 Endpoints</h3>
+<table>
+  <tr><th>Méthode</th><th>Route</th><th>Description</th><th>Erreurs</th></tr>
+  <tr><td>POST</td><td>/chambres</td><td>Créer une chambre</td><td>400 capacité incohérente · 409 doublon</td></tr>
+  <tr><td>GET</td><td>/chambres?type=&amp;batiment=&amp;disponible=</td><td>Lister avec filtres optionnels</td><td>—</td></tr>
+  <tr><td>GET</td><td>/chambres/disponibles?type=&amp;batiment=</td><td>Uniquement les chambres libres</td><td>—</td></tr>
+  <tr><td>GET</td><td>/chambres/:id</td><td>Détail d'une chambre</td><td>404</td></tr>
+  <tr><td>PATCH</td><td>/chambres/:id</td><td>Mise à jour partielle</td><td>404 · 409</td></tr>
+  <tr><td>DELETE</td><td>/chambres/:id</td><td>Suppression</td><td>404</td></tr>
+</table>
+<h3>3.3 Règles métier et détails</h3>
+<ul>
+  <li><strong>Une chambre = un résident</strong> : deux méthodes dédiées <code>occuper()</code> / <code>liberer()</code> sont exposées au reste de l'application. <code>occuper()</code> réalise un <code>UPDATE … WHERE id = ? AND disponible = true</code> puis vérifie le nombre de lignes affectées : deux approbations concurrentes ne peuvent pas gagner. 404 si la chambre n'existe pas, 409 si elle est déjà prise.</li>
+  <li>Validation des DTO par <code>class-validator</code> (pipe global en <code>whitelist + forbidNonWhitelisted + transform</code>).</li>
+  <li>Documentation Swagger de tous les endpoints (<code>@ApiTags</code>, réponses typées).</li>
+</ul>
+
+<h2>4. Backend — Phase 2 : Demande Service</h2>
+<h3>4.1 Entité <code>DemandeHebergement</code></h3>
+<table>
+  <tr><th>Champ</th><th>Type</th><th>Notes</th></tr>
+  <tr><td><code>id</code></td><td>uuid (PK)</td><td></td></tr>
+  <tr><td><code>etudiantId</code></td><td>varchar(100), indexé</td><td>identifiant provenant (à terme) du JWT <code>IAuthentification</code></td></tr>
+  <tr><td><code>statut</code></td><td>enum, indexé</td><td><code>EN_ATTENTE | APPROUVEE | REFUSEE | ANNULEE</code></td></tr>
+  <tr><td><code>dateDepot</code></td><td>timestamptz</td><td>défaut = maintenant</td></tr>
+  <tr><td><code>dateArrivee / dateDepart</code></td><td>timestamptz</td><td><code>dateArrivee &lt; dateDepart</code> obligatoire</td></tr>
+  <tr><td><code>chambreId</code></td><td>uuid nullable, indexé</td><td>chambre souhaitée puis attribuée</td></tr>
+</table>
+<h3>4.2 Cycle de vie (transitions autorisées)</h3>
+<pre>
+EN_ATTENTE ──► APPROUVEE   (occupe la chambre, crée le contrat, émet demande.approuvee)
+EN_ATTENTE ──► REFUSEE
+EN_ATTENTE ──► ANNULEE
+APPROUVEE  ──► ANNULEE     (libère la chambre, résilie le contrat, émet demande.annulee)
+REFUSEE / ANNULEE : états terminaux
+</pre>
+<p>Toute autre transition, ou une transition vers le statut courant, renvoie <strong>409 Conflict</strong>. Une approbation exige une chambre libre (<code>chambreId</code> fourni dans le PATCH ou déjà souhaitée dans la demande) : la chambre est occupée de façon atomique avant l'enregistrement.</p>
+<h3>4.3 Endpoints</h3>
+<table>
+  <tr><th>Méthode</th><th>Route</th><th>Description</th><th>Erreurs</th></tr>
+  <tr><td>POST</td><td>/demandes</td><td>Déposer une demande</td><td>400 dates invalides · 404 chambre souhaitée inconnue</td></tr>
+  <tr><td>GET</td><td>/demandes?statut=&amp;etudiantId=&amp;chambreId=</td><td>File admin (filtrable) ; l'étudiant est filtré sur son id par le front</td><td>—</td></tr>
+  <tr><td>GET</td><td>/demandes/:id</td><td>Détail</td><td>404</td></tr>
+  <tr><td>PATCH</td><td>/demandes/:id/statut</td><td>Changer le statut (approbation avec chambre, refus, annulation)</td><td>400 · 404 · 409</td></tr>
+</table>
+<h3>4.4 Événements émis</h3>
+<table>
+  <tr><th>Événement</th><th>Charge utile</th><th>Consommateur</th></tr>
+  <tr><td><code>demande.approuvee</code></td><td>demandeId, etudiantId, chambreId, dateDebut, dateFin</td><td>ContratsService → création du contrat</td></tr>
+  <tr><td><code>demande.annulee</code></td><td>demandeId, chambreId</td><td>ContratsService → résiliation du contrat</td></tr>
+</table>
+
+<h2>5. Backend — Phase 3 : Contrat Service</h2>
+<h3>5.1 Entité <code>Contrat</code></h3>
+<table>
+  <tr><th>Champ</th><th>Type</th><th>Notes</th></tr>
+  <tr><td><code>id</code></td><td>uuid (PK)</td><td></td></tr>
+  <tr><td><code>residentId</code></td><td>varchar(100), indexé</td><td></td></tr>
+  <tr><td><code>chambreId</code></td><td>uuid, indexé</td><td></td></tr>
+  <tr><td><code>demandeId</code></td><td>uuid, indexé, <strong>unique</strong></td><td>un seul contrat par demande</td></tr>
+  <tr><td><code>dateDebut / dateFin</code></td><td>timestamptz</td><td><code>dateFin &gt; dateDebut</code> ; <code>dateFin ≤ 31 juillet</code> de l'année académique</td></tr>
+  <tr><td><code>montantMensuel</code></td><td>numeric(10,2)</td><td>tarif par type : SIMPLE 150 · DOUBLE 100 · STUDIO 200 TND — transformer pour exposer un nombre</td></tr>
+  <tr><td><code>statut</code></td><td>enum, indexé</td><td><code>ACTIF | TERMINE | RESILIE</code></td></tr>
+</table>
+<h3>5.2 Règles métier</h3>
+<ul>
+  <li><strong>Création automatique</strong> : le service écoute <code>demande.approuvee</code> et crée un contrat <code>ACTIF</code> en récupérant le type de la chambre pour le loyer. Opération <strong>idempotente</strong> (un contrat existe déjà pour la demande → on le retourne).</li>
+  <li><strong>Dates</strong> : <code>dateFin</code> strictement postérieure à <code>dateDebut</code> ; <code>dateFin</code> ne peut pas dépasser la fin de l'année académique (31 juillet, calculée depuis la date de début : rentrée à partir du 1<sup>er</sup> août → année suivante).</li>
+  <li><strong>Résiliation</strong> : seule une résiliation d'un contrat <code>ACTIF</code> est acceptée (sinon 409) ; la chambre associée est <strong>libérée</strong> via <code>ChambresService.liberer()</code>. L'annulation d'une demande approuvée résilie aussi le contrat (écoute de <code>demande.annulee</code>).</li>
+  <li><strong>Robustesse</strong> : les écouteurs d'événements capturent leurs erreurs et les journalisent (Logger) afin qu'un incident côté Contrat ne casse pas la réponse d'approbation de la Demande — cohérence à terme, typique d'une architecture événementielle (une réconciliation pourra être ajoutée).</li>
+</ul>
+<h3>5.3 Endpoints</h3>
+<table>
+  <tr><th>Méthode</th><th>Route</th><th>Description</th><th>Erreurs</th></tr>
+  <tr><td>GET</td><td>/contrats?statut=&amp;residentId=&amp;chambreId=&amp;demandeId=</td><td>Liste admin filtrable</td><td>—</td></tr>
+  <tr><td>GET</td><td>/contrats/resident/:residentId?statut=</td><td>Contrats d'un résident</td><td>—</td></tr>
+  <tr><td>GET</td><td>/contrats/:id</td><td>Détail</td><td>404</td></tr>
+  <tr><td>PATCH</td><td>/contrats/:id/resilier</td><td>Résilier (libère la chambre)</td><td>404 · 409</td></tr>
+</table>
+
+<div class="pagebreak"></div>
+<h2>6. Backend — Structure, configuration et outillage</h2>
+<h3>6.1 Arborescence complète (<code>backend/</code>)</h3>
+<pre>
+backend/
+├── docker-compose.yml          Postgres 16 + script d'init du schéma
+├── scripts/
+│   └── init-schema.sql         CREATE SCHEMA IF NOT EXISTS "BDD_Residences"
+├── .env / .env.example         Port, préfixe API, connexion PostgreSQL, JWT
+├── package.json                NestJS 10, TypeORM, class-validator, Swagger, event-emitter…
+├── tsconfig.json / tsconfig.build.json / nest-cli.json
+├── .eslintrc.js / .prettierrc / .gitignore
+└── src/
+    ├── main.ts                          Bootstrap : ValidationPipe global, Swagger /api/docs, port 3001
+    ├── app.module.ts                    ConfigModule + TypeOrmModule.forRootAsync + EventEmitter + 3 modules
+    ├── config/
+    │   ├── database.config.ts           Config typée (host, port, user, db, schéma…)
+    │   └── ensure-schema.ts             CREATE SCHEMA IF NOT EXISTS avant la connexion TypeORM
+    ├── common/
+    │   ├── decorators/public.decorator.ts    @Public() (stub d'auth, branché plus tard)
+    │   ├── guards/jwt-auth.guard.ts          Garde JWT « placeholder » (contrat IAuthentification)
+    │   └── transformers/numeric.transformer.ts  numeric PostgreSQL → number dans l'API
+    ├── chambres/
+    │   ├── chambres.module.ts / chambres.controller.ts / chambres.service.ts
+    │   ├── chambres.service.spec.ts          13 tests unitaires (dont occuper/liberer)
+    │   ├── entities/chambre.entity.ts · chambre-type.enum.ts
+    │   └── dto/create-chambre.dto.ts · update-chambre.dto.ts · filter-chambre.dto.ts
+    ├── demandes/
+    │   ├── demandes.module.ts / demandes.controller.ts / demandes.service.ts
+    │   ├── demandes.service.spec.ts          10 tests unitaires (transitions, événements)
+    │   ├── entities/demande-hebergement.entity.ts · demande-statut.enum.ts
+    │   ├── dto/create-demande.dto.ts · update-demande-statut.dto.ts · filter-demande.dto.ts
+    │   └── events/demande.events.ts          Constantes + classes de charge utile
+    └── contrats/
+        ├── contrats.module.ts / contrats.controller.ts / contrats.service.ts
+        ├── contrats.service.spec.ts          13 tests unitaires (règles, écouteurs, idempotence)
+        ├── entities/contrat.entity.ts · contrat-statut.enum.ts
+        ├── constants/pricing.constants.ts    Tarifs par type de chambre
+        ├── utils/academic-year.util.ts       Fin d'année académique (31 juillet)
+        └── dto/filter-contrat.dto.ts · find-resident-contrats.dto.ts
+</pre>
+<h3>6.2 Bibliothèques utilisées</h3>
+<table>
+  <tr><th>Bibliothèque</th><th>Rôle</th></tr>
+  <tr><td>@nestjs/{core,common,platform-express} 10</td><td>Framework HTTP, modules, pipes, guards</td></tr>
+  <tr><td>@nestjs/typeorm + typeorm + pg</td><td>ORM et pilote PostgreSQL (schéma <code>BDD_Residences</code>)</td></tr>
+  <tr><td>class-validator + class-transformer</td><td>Validation et transformation des DTO</td></tr>
+  <tr><td>@nestjs/swagger</td><td>Documentation OpenAPI interactive sur <code>/api/docs</code></td></tr>
+  <tr><td>@nestjs/config</td><td>Chargement typé du <code>.env</code></td></tr>
+  <tr><td>@nestjs/event-emitter</td><td>Bus d'événements interne (Demande → Contrat)</td></tr>
+  <tr><td>Jest + @nestjs/testing</td><td>Tests unitaires des 3 services (36 tests)</td></tr>
+</table>
+<h3>6.3 PostgreSQL</h3>
+<ul>
+  <li>Schéma physique dédié : <code>BDD_Residences</code>, créé automatiquement au démarrage (<code>src/config/ensure-schema.ts</code>) ou par <code>scripts/init-schema.sql</code> dans Docker.</li>
+  <li>TypeORM en <code>synchronize: true</code> pour le développement (piloté par <code>DB_SYNCHRONIZE</code>) ; les migrations pourront remplacer ce mode plus tard.</li>
+  <li>Un <code>docker-compose.yml</code> fournit Postgres 16 (base <code>smartcampus</code>, utilisateur <code>postgres</code>) — à utiliser sur une machine équipée de Docker.</li>
+  <li>Variables : <code>DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, DB_SCHEMA, DB_SYNCHRONIZE, DB_LOGGING</code>.</li>
+</ul>
+<h3>6.4 Démarrage</h3>
+<pre>
+cd backend
+npm install
+# 1) Démarrer PostgreSQL (docker compose up -d  OU  instance locale)
+# 2) Configurer .env si besoin (défauts : localhost:5432 / postgres / smartcampus)
+npm run start:dev        # API + Swagger sur http://localhost:3001/api/docs
+npm run test             # suite Jest
+npm run lint             # ESLint + Prettier
+</pre>
+<h3>6.5 Vérifications effectuées</h3>
+<div class="ok">
+  <strong>Résultats :</strong>
+  <ul>
+    <li><code>npm run build</code> (Nest) : compilation TypeScript sans erreur.</li>
+    <li><code>npm test</code> : <strong>36 tests / 36 réussis</strong> — Chambres 11, Demandes 12, Contrats 13.</li>
+    <li><code>npm run lint</code> : aucune erreur.</li>
+    <li><code>npm run build</code> (frontend) : <code>tsc -b</code> + build Vite réussis (chunk <code>HousingModule</code> généré).</li>
+  </ul>
+</div>
+<div class="note"><strong>Limite connue :</strong> aucun PostgreSQL n'étant disponible sur la machine (Docker absent, pas d'instance locale), les tests d'intégration HTTP réels contre la base n'ont pas pu être exécutés ; les tests unitaires mockent les repositories. La vérification de bout en bout se fera au premier <code>docker compose up -d</code> + <code>npm run start:dev</code>.</div>
+
+<div class="pagebreak"></div>
+<h2>7. Frontend — Intégration au module Résidences</h2>
+<h3>7.1 Ce qui existait / ce qui a changé</h3>
+<table>
+  <tr><th>Élément</th><th>Avant (maquette)</th><th>Après (contrat backend)</th></tr>
+  <tr><td>Modèle</td><td>Residence (lits), HousingRoom (occupants), HousingRequest (4 étapes)</td><td><code>Chambre</code> (type SIMPLE/DOUBLE/STUDIO, bâtiment, étage, disponible), <code>Demande</code> (statuts backend), <code>Contrat</code></td></tr>
+  <tr><td>Routes pages</td><td>/residences, /residences/ma-demande, /residences/demandes, /residences/maintenance</td><td>/residences, /residences/chambres, /residences/demandes, /residences/demandes/new, /residences/contrats, /residences/maintenance</td></tr>
+  <tr><td>API</td><td>/residences, /housing-requests, /tickets (mocks seuls)</td><td>/chambres, /demandes, /contrats (appels réels NestJS) + mocks reproduisant les mêmes règles</td></tr>
+  <tr><td>Modèles supprimés</td><td colspan="2"><code>ResidenceCard</code>, <code>RoomPicker</code>, <code>HousingRequestStepper</code>, <code>OccupancyChart</code>, pages <code>MyRequestPage</code> et <code>RequestsPage</code></td></tr>
+</table>
+<h3>7.2 Pages livrées</h3>
+<table>
+  <tr><th>Route</th><th>Rôle(s)</th><th>Contenu</th></tr>
+  <tr><td><code>/residences</code></td><td>étudiant, admin</td><td>Tableau de bord : statistiques (chambres, libres, occupées, demandes en attente / mes demandes), occupation par bâtiment, dernières demandes, contrats actifs</td></tr>
+  <tr><td><code>/residences/chambres</code></td><td>étudiant, admin</td><td>Grille de chambres, filtres type / bâtiment / disponibilité ; admin : création (dialogue), bascule disponibilité, suppression</td></tr>
+  <tr><td><code>/residences/demandes</code></td><td>étudiant</td><td>Mes demandes : statut, séjour, chambre attribuée, annulation (EN_ATTENTE ou APPROUVEE)</td></tr>
+  <tr><td><code>/residences/demandes</code></td><td>admin</td><td>File complète : compteurs, filtre statut, tableau, approbation avec sélecteur de chambre libre (alerte 409 si occupée), refus</td></tr>
+  <tr><td><code>/residences/demandes/new</code></td><td>étudiant</td><td>Formulaire : date d'arrivée / de départ (validation arrivee &lt; depart), chambre souhaitée optionnelle</td></tr>
+  <tr><td><code>/residences/contrats</code></td><td>étudiant</td><td>Détail de mes contrats : chambre, période, loyer mensuel, statut</td></tr>
+  <tr><td><code>/residences/contrats</code></td><td>admin</td><td>Tous les contrats, filtre statut, résiliation (confirmation, libère la chambre)</td></tr>
+  <tr><td><code>/residences/maintenance</code></td><td>étudiant, admin</td><td>Signalements de pannes (service mocké) : formulaire par bâtiment, traitement Signalé → En cours → Résolu</td></tr>
+</table>
+<h3>7.3 Correspondance front ↔ back</h3>
+<table>
+  <tr><th>Fonction front (<code>features/housing/api</code>)</th><th>Route NestJS appelée</th></tr>
+  <tr><td><code>listChambres</code> / <code>listChambresDisponibles</code></td><td>GET /chambres · GET /chambres/disponibles</td></tr>
+  <tr><td><code>createChambre</code> / <code>updateChambre</code> / <code>deleteChambre</code></td><td>POST /chambres · PATCH /chambres/:id · DELETE /chambres/:id</td></tr>
+  <tr><td><code>listDemandes</code> (étudiant filtré sur son id)</td><td>GET /demandes?statut=&amp;etudiantId=</td></tr>
+  <tr><td><code>createDemande</code></td><td>POST /demandes</td></tr>
+  <tr><td><code>approveDemande</code> / <code>refuseDemande</code> / <code>cancelDemande</code></td><td>PATCH /demandes/:id/statut</td></tr>
+  <tr><td><code>listContrats</code> / <code>listContratsResident</code> / <code>getContrat</code></td><td>GET /contrats · GET /contrats/resident/:id · GET /contrats/:id</td></tr>
+  <tr><td><code>resilierContrat</code></td><td>PATCH /contrats/:id/resilier</td></tr>
+  <tr><td><code>listTickets</code> / <code>createTicket</code> / <code>updateTicketStatus</code></td><td>mock local uniquement (hors périmètre backend)</td></tr>
+</table>
+<h3>7.4 Mode démo (mocks) et mode réel</h3>
+<p>L'application partagée fonctionne par défaut avec <code>VITE_USE_MOCKS=true</code> (les autres modules de l'équipe ne disposent pas encore de backends). Le module Résidences respecte cette architecture : chaque fonction API fournit un <code>mock</code> exécutant les mêmes règles (occupation atomique simulée, transitions, création/résiliation de contrat, événements toastés via le bus de démo).</p>
+<p>Pour brancher le backend NestJS :</p>
+<pre>
+# .env (racine du front)
+VITE_USE_MOCKS=false
+VITE_API_BASE_URL=http://localhost:3001/api
+</pre>
+<h3>7.5 Fichiers ajoutés / modifiés / supprimés (frontend)</h3>
+<pre>
+src/features/housing/
+├── types/index.ts                 [RÉÉCRIT]  Chambre, Demande, Contrat (+ Ticket), constantes, tarifs
+├── api/index.ts                   [RÉÉCRIT]  appels NestJS + mocks métier + événements de démo
+├── mocks/index.ts                 [RÉÉCRIT]  base en mémoire : 28 chambres (A/B/C), demandes, contrats, tickets
+├── hooks/index.ts                 [RÉÉCRIT]  useChambres, useChambresDisponibles, useDemandes, useContratsVisibles…
+├── schemas/index.ts               [RÉÉCRIT]  zod : demande (+ dates), chambre (+ cohérence capacité), ticket
+├── i18n/index.ts                  [RÉÉCRIT]  libellés FR des nouvelles pages
+├── README.md                      [MIS À JOUR] contrat API, règles, pages, branchement
+├── utils/time.ts                  [MODIFIÉ]  + defaultDeparture, formatIsoDay
+├── utils/students.ts              [AJOUTÉ]   noms d'affichage des matricules
+├── components/
+│   ├── DemandeStatusBadge.tsx     [AJOUTÉ]   badge En attente/Approuvée/Refusée/Annulée
+│   ├── ContratStatusBadge.tsx     [AJOUTÉ]   badge Actif/Terminé/Résilié
+│   ├── ChambreCard.tsx            [AJOUTÉ]   fiche chambre + actions admin
+│   ├── ChambrePicker.tsx          [AJOUTÉ]   sélecteur de chambre libre (groupé par bâtiment)
+│   ├── ChambreFormDialog.tsx      [AJOUTÉ]   dialogue de création de chambre (admin)
+│   ├── BatimentOccupancy.tsx      [AJOUTÉ]   occupation par bâtiment (barres accessibles)
+│   ├── TicketStatusBadge.tsx      [CONSERVÉ] badge de signalement
+│   ├── ResidenceCard.tsx          [SUPPRIMÉ]
+│   ├── RoomPicker.tsx             [SUPPRIMÉ]
+│   ├── HousingRequestStepper.tsx  [SUPPRIMÉ]
+│   └── OccupancyChart.tsx         [SUPPRIMÉ] (remplacé par BatimentOccupancy)
+└── pages/
+    ├── HousingModule.tsx          [RÉÉCRIT]  onglets + sous-routes du module
+    ├── ResidencesPage.tsx         [RÉÉCRIT]  tableau de bord
+    ├── ChambresPage.tsx           [AJOUTÉ]   liste + filtres + CRUD admin
+    ├── DemandesPage.tsx           [AJOUTÉ]   vues étudiant (suivi/annulation) et admin (approbation/refus)
+    ├── NewDemandePage.tsx         [AJOUTÉ]   formulaire de demande
+    ├── ContratsPage.tsx           [AJOUTÉ]   contrats étudiant / admin + résiliation
+    ├── MaintenancePage.tsx        [ADAPTÉ]   résidence → bâtiment
+    ├── MyRequestPage.tsx          [SUPPRIMÉ]
+    └── RequestsPage.tsx           [SUPPRIMÉ]
+</pre>
+<p class="small muted">Aucun autre module (Académique, Ressources, Bibliothèque, Vie étudiante, Utilisateurs, tableau de bord) n'a été touché : le registre <code>features/registry.ts</code>, la navigation et les routes existantes sont conservés tels quels — seul l'onglet du module Résidences pointe vers les nouvelles pages.</p>
+
+<h2>8. Limites et suites</h2>
+<ul>
+  <li><strong>Authentification</strong> : le backend valide le format du Bearer token mais la vérification JWT contre le service Utilisateurs (<code>IAuthentification</code>) reste un stub (<code>JwtAuthGuard</code> + <code>@Public()</code>) — à activer quand le secret/JWKS partagé sera disponible. Les rôles sont pour l'instant appliqués côté front (registry) et simulés côté mocks.</li>
+  <li><strong>Transactions</strong> : approbation = occupation de la chambre puis création du contrat via événement. En cas d'échec du contrat, la demande reste approuvée (log d'erreur). Une saga/outbox ou une transaction partagée (même base) pourra renforcer ce point.</li>
+  <li><strong>Intégration réelle PostgreSQL</strong> : à exécuter dès que Docker ou une instance locale est disponible (création du schéma automatique au démarrage).</li>
+  <li><strong>Maintenance</strong> : hors périmètre des trois services, reste mockée avec un message explicite en mode réel (501).</li>
+  <li><strong>Tests front</strong> : l'application n'a pas de harnais de tests configuré ; la vérification s'appuie sur <code>tsc</code> + build Vite.</li>
+</ul>
+
+<div class="ok" style="margin-top:18px;">
+  <strong>Résumé :</strong> 3 microservices logiques NestJS livrés et testés (Chambre, Demande, Contrat), schéma PostgreSQL dédié, Swagger, bus d'événements interne, et les 5 pages demandées du module Résidences branchées sur ces API — le tout vérifié par compilation, 36 tests unitaires, lint et build frontend.
+</div>
+
+</body>
+</html>

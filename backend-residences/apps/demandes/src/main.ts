@@ -1,0 +1,48 @@
+import 'reflect-metadata';
+import { ValidationPipe, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { AppModule } from './app.module';
+import { ensureSchemaExists, loadEnvFiles } from './config/ensure-schema';
+
+async function bootstrap(): Promise<void> {
+  loadEnvFiles();
+  await ensureSchemaExists(process.env.DB_DEMANDES_SCHEMA ?? 'BDD_Demandes');
+
+  const app = await NestFactory.create(AppModule);
+  const config = app.get(ConfigService);
+
+  const apiPrefix = config.get<string>('API_PREFIX', 'api');
+  const port = parseInt(config.get<string>('DEMANDES_PORT', '3012'), 10);
+
+  app.setGlobalPrefix(apiPrefix);
+  app.enableCors({ origin: true, credentials: true });
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    }),
+  );
+
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('SmartCampus - Residences : Demandes')
+    .setDescription(
+      'Microservice Demandes (schema BDD_Demandes) - publie demande.approuvee / demande.annulee sur RabbitMQ',
+    )
+    .setVersion('2.0.0')
+    .build();
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup(`${apiPrefix}/docs`, app, document);
+
+  await app.listen(port);
+
+  const logger = new Logger('Bootstrap');
+  logger.log(
+    `Demandes service running on http://localhost:${port}/${apiPrefix}`,
+  );
+}
+void bootstrap();

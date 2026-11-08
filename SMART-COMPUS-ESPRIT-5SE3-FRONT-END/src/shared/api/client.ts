@@ -43,6 +43,11 @@ const isRealRoute = (path: string) => REAL_PREFIXES.some((p: string) => path ===
  */
 const SERVICE_ROUTES: ReadonlyArray<{ prefixes: string[]; baseUrl: string }> = [
   { prefixes: ["/auth", "/users", "/roles", "/login-history"], baseUrl: USER_API_BASE_URL },
+  // Résidences (NestJS, Chambre/Demande/Contrat) : /chambres, /demandes, /contrats → RESIDENCES_API_BASE_URL
+  {
+    prefixes: ["/chambres", "/demandes", "/contrats"],
+    baseUrl: import.meta.env.VITE_RESIDENCES_API_BASE_URL ?? "http://localhost:3001/api",
+  },
 ];
 
 const baseUrlFor = (path: string): string => {

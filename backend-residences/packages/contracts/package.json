@@ -1,0 +1,11 @@
+{
+  "name": "@residences/contracts",
+  "version": "1.0.0",
+  "description": "Contrats partages des microservices Residences (evenements du domaine, utilitaires communs)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

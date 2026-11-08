@@ -1,29 +1,34 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card";
 import { useT } from "@/shared/i18n";
 import { cn } from "@/shared/lib/utils";
-import type { Residence } from "../types";
 
-/** Occupation par résidence : barres horizontales, valeurs toujours écrites (pas seulement la couleur). */
-export function OccupancyChart({ residences }: { residences: Residence[] }) {
+export interface BatimentOccupancyRow {
+  name: string;
+  occupied: number;
+  total: number;
+}
+
+/** Occupation des chambres par bâtiment : barres horizontales, valeurs toujours écrites. */
+export function BatimentOccupancy({ rows }: { rows: BatimentOccupancyRow[] }) {
   const t = useT();
-  const used = residences.reduce((n, r) => n + r.occupied, 0);
-  const capacity = residences.reduce((n, r) => n + r.capacity, 0);
+  const used = rows.reduce((n, r) => n + r.occupied, 0);
+  const total = rows.reduce((n, r) => n + r.total, 0);
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t("housing.chart.title")}</CardTitle>
-        <p className="text-sm text-muted-foreground">{t("housing.chart.total", { used, capacity })}</p>
+        <CardTitle>{t("housing.dash.occupancy")}</CardTitle>
+        <p className="text-sm text-muted-foreground">{t("housing.dash.occupancyTotal", { used, total })}</p>
       </CardHeader>
       <CardContent>
         <ul className="space-y-3">
-          {residences.map((r) => {
-            const pct = r.capacity ? Math.round((r.occupied / r.capacity) * 100) : 0;
+          {rows.map((r) => {
+            const pct = r.total ? Math.round((r.occupied / r.total) * 100) : 0;
             return (
-              <li key={r.id} aria-label={t("housing.chart.row", { name: r.name, used: r.occupied, capacity: r.capacity, pct })}>
+              <li key={r.name} aria-label={t("housing.dash.occupancyRow", { name: r.name, used: r.occupied, total: r.total, pct })}>
                 <div className="mb-1 flex items-baseline justify-between gap-3 text-sm" aria-hidden="true">
                   <span className="truncate font-medium">{r.name}</span>
                   <span className="shrink-0 tabular-nums text-muted-foreground">
-                    {r.occupied}/{r.capacity} · {pct} %
+                    {r.occupied}/{r.total} · {pct} %
                   </span>
                 </div>
                 <div aria-hidden="true" className="h-3 overflow-hidden rounded-full bg-slate-200">

@@ -1,30 +1,35 @@
 import { z } from "zod";
-import { DURATIONS, ROOM_TYPES, TICKET_CATEGORIES } from "../types";
-import { todayISO } from "../utils/time";
+import { CHAMBRE_TYPES, TICKET_CATEGORIES, capaciteValide, type ChambreType } from "../types";
 
 /** Messages d'erreur = clés i18n (traduites par les formulaires). */
 
-// Étape 1 — résidence
-export const residenceStepSchema = z.object({ residenceId: z.string().min(1, "housing.err.residence") });
+export const demandeSchema = z
+  .object({
+    dateArrivee: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "housing.err.arrivee"),
+    dateDepart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "housing.err.depart"),
+    chambreId: z.string(),
+  })
+  .refine((v) => v.dateArrivee < v.dateDepart, { path: ["dateDepart"], message: "housing.err.dates" })
+  .refine((v) => v.dateDepart <= academicYearEnd(v.dateArrivee), { path: ["dateDepart"], message: "housing.err.anneeAcademique" });
 
-// Étape 2 — chambre et dates
-export const roomStepSchema = z.object({
-  roomType: z.enum(ROOM_TYPES as [string, ...string[]], "housing.err.roomType"),
-  entryDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "housing.err.date")
-    .refine((d) => d >= todayISO(), "housing.err.datePast"),
-  durationMonths: z.number().refine((n) => (DURATIONS as readonly number[]).includes(n), "housing.err.duration"),
-});
+/** Fin de l'année académique (31 juillet) associée à une date d'arrivée. */
+const academicYearEnd = (dateArrivee: string): string => {
+  const [year, month] = dateArrivee.split("-").map(Number);
+  return month >= 8 ? `${year + 1}-07-31` : `${year}-07-31`;
+};
 
-// Étape 3 — précisions
-export const detailsStepSchema = z.object({
-  accessibility: z.boolean(),
-  notes: z.string().trim().max(200, "housing.err.notesLong"),
-});
+export const chambreSchema = z
+  .object({
+    numero: z.string().trim().min(2, "housing.err.numeroShort").max(20, "housing.err.numeroLong"),
+    batiment: z.string().trim().min(2, "housing.err.batiment").max(60, "housing.err.batimentLong"),
+    etage: z.number().int("housing.err.etage").min(0, "housing.err.etage").max(20, "housing.err.etage"),
+    type: z.enum(CHAMBRE_TYPES as [string, ...string[]], "housing.err.type"),
+    capacite: z.number().int("housing.err.capacite").min(1, "housing.err.capacite").max(4, "housing.err.capacite"),
+  })
+  .refine((v) => capaciteValide(v.type as ChambreType, v.capacite), { path: ["capacite"], message: "housing.err.capaciteType" });
 
 export const ticketSchema = z.object({
-  residenceId: z.string().min(1, "housing.err.residence"),
+  batiment: z.string().min(1, "housing.err.batimentChoice"),
   location: z.string().trim().min(2, "housing.err.locationShort").max(60, "housing.err.locationLong"),
   category: z.enum(TICKET_CATEGORIES as [string, ...string[]], "housing.err.category"),
   description: z.string().trim().min(10, "housing.err.descriptionShort").max(300, "housing.err.descriptionLong"),

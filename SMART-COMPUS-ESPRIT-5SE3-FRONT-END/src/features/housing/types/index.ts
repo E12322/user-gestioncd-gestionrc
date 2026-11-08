@@ -1,73 +1,91 @@
-export type RoomType = "single" | "double";
+// ---------------------------------------------------------------------------
+// Contrat de données aligné sur le back-end NestJS (microservices Residences) :
+//   GET/POST /chambres            → Chambre
+//   POST /demandes, /demandes/... → Demande
+//   /contrats/...                 → Contrat
+// ---------------------------------------------------------------------------
 
-export interface HousingRoom {
+export type ChambreType = "SIMPLE" | "DOUBLE" | "STUDIO";
+
+export interface Chambre {
   id: string;
-  residenceId: string;
-  /** Numéro affiché, ex. « 204 ». */
-  number: string;
-  floor: number;
-  type: RoomType;
-  beds: number;
-  occupants: number;
+  numero: string;
+  type: ChambreType;
+  /** Nombre de residents par chambre. */
+  capacite: number;
+  disponible: boolean;
+  batiment: string;
+  etage: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export interface Residence {
+export interface ChambreInput {
+  numero: string;
+  type: ChambreType;
+  capacite: number;
+  disponible?: boolean;
+  batiment: string;
+  etage: number;
+}
+
+export interface ChambreFilter {
+  type?: ChambreType;
+  batiment?: string;
+  disponible?: boolean;
+}
+
+export type DemandeStatut = "EN_ATTENTE" | "APPROUVEE" | "REFUSEE" | "ANNULEE";
+
+export interface Demande {
   id: string;
-  name: string;
-  address: string;
-  /** Distance à pied du campus, en minutes. */
-  walkMinutes: number;
-  /** Loyer mensuel par lit, en dinars. */
-  monthlyRent: number;
-  amenities: string[];
-  /** Lits au total / lits occupés (calculés à partir des chambres). */
-  capacity: number;
-  occupied: number;
+  etudiantId: string;
+  statut: DemandeStatut;
+  dateDepot: string;
+  dateArrivee: string;
+  dateDepart: string;
+  chambreId: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-/** Statuts alignés sur StatusPill : En attente / Confirmé (= chambre affectée) / Refusé. */
-export type RequestStatus = "pending" | "confirmed" | "refused";
+export interface DemandeInput {
+  etudiantId: string;
+  dateArrivee: string;
+  dateDepart: string;
+  chambreId?: string;
+}
 
-export interface HousingRequest {
+export type ContratStatut = "ACTIF" | "TERMINE" | "RESILIE";
+
+export interface Contrat {
   id: string;
-  studentId: string;
-  studentName: string;
-  residenceId: string;
-  residenceName: string;
-  roomType: RoomType;
-  /** "YYYY-MM-DD" */
-  entryDate: string;
-  durationMonths: number;
-  accessibility: boolean;
-  notes: string;
-  status: RequestStatus;
-  requestedAt: string;
-  decidedAt?: string;
-  /** Renseignés une fois la chambre affectée. */
-  assignedResidenceName?: string;
-  assignedRoomNumber?: string;
+  residentId: string;
+  chambreId: string;
+  demandeId: string;
+  dateDebut: string;
+  dateFin: string;
+  /** Loyer mensuel en dinars, tarifé par type de chambre. */
+  montantMensuel: number;
+  statut: ContratStatut;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export interface HousingRequestInput {
-  residenceId: string;
-  roomType: RoomType;
-  entryDate: string;
-  durationMonths: number;
-  accessibility: boolean;
-  notes: string;
-}
+// ---------------------------------------------------------------------------
+// Maintenance (hors périmètre des 3 services) — service mocké du module.
+// ---------------------------------------------------------------------------
 
 export type TicketCategory = "plumbing" | "electricity" | "heating" | "internet" | "furniture" | "other";
 export type TicketStatus = "open" | "in_progress" | "resolved";
 
-/** Signalement de panne ; l'administrateur les traite (pas de rôle Technicien). */
 export interface Ticket {
   id: string;
   studentId: string;
   studentName: string;
-  residenceId: string;
-  residenceName: string;
-  /** Texte libre : « Chambre 204 », « Cuisine commune »… */
+  /** Bâtiment concerné, ex. « Bâtiment A ». */
+  batiment: string;
+  /** Texte libre : « Chambre A-101 », « Cuisine commune »… */
   location: string;
   category: TicketCategory;
   description: string;
@@ -77,12 +95,29 @@ export interface Ticket {
 }
 
 export interface TicketInput {
-  residenceId: string;
+  batiment: string;
   location: string;
   category: TicketCategory;
   description: string;
 }
 
-export const ROOM_TYPES: readonly RoomType[] = ["single", "double"];
+// ---------------------------------------------------------------------------
+// Constantes partagées
+// ---------------------------------------------------------------------------
+
+export const CHAMBRE_TYPES: readonly ChambreType[] = ["SIMPLE", "DOUBLE", "STUDIO"];
 export const TICKET_CATEGORIES: readonly TicketCategory[] = ["plumbing", "electricity", "heating", "internet", "furniture", "other"];
-export const DURATIONS = [3, 6, 9, 12] as const;
+
+/** Tarif mensuel par résident (TND) — doit rester aligné avec le Contrat service. */
+export const MONTANT_MENSUEL_PAR_TYPE: Record<ChambreType, number> = {
+  SIMPLE: 150,
+  DOUBLE: 100,
+  STUDIO: 200,
+};
+
+/** Capacité attendue par type : SIMPLE = 1, DOUBLE = 2, STUDIO ≤ 2. */
+export function capaciteValide(type: ChambreType, capacite: number): boolean {
+  if (type === "SIMPLE") return capacite === 1;
+  if (type === "DOUBLE") return capacite === 2;
+  return capacite >= 1 && capacite <= 2;
+}

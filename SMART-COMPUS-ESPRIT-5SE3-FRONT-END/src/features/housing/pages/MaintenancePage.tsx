@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { AlertCircle, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/shared/components/ui/button";
@@ -16,9 +16,9 @@ import { formatDateTime } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/utils";
 import { createTicket, updateTicketStatus } from "../api";
 import { TicketStatusBadge } from "../components/TicketStatusBadge";
-import { useResidences, useTickets, useViewer } from "../hooks";
+import { useChambres, useTickets, useViewer } from "../hooks";
 import { fieldErrors, ticketSchema } from "../schemas";
-import { TICKET_CATEGORIES, type Residence, type Ticket, type TicketCategory, type TicketStatus } from "../types";
+import { TICKET_CATEGORIES, type Ticket, type TicketCategory, type TicketStatus } from "../types";
 
 const STATUSES: TicketStatus[] = ["open", "in_progress", "resolved"];
 
@@ -49,15 +49,15 @@ function Field({ id, label, error, hint, children }: { id: string; label: string
   );
 }
 
-type Errors = Partial<Record<"residenceId" | "location" | "category" | "description", string>>;
+type Errors = Partial<Record<"batiment" | "location" | "category" | "description", string>>;
 
-function TicketForm({ residences, onCreated }: { residences: Residence[]; onCreated: () => void }) {
+function TicketForm({ batiments, onCreated }: { batiments: string[]; onCreated: () => void }) {
   const t = useT();
   const viewer = useViewer();
   const formRef = useRef<HTMLFormElement>(null);
   const { mutate, isPending } = useMutation(createTicket);
   const [values, setValues] = useState({
-    residenceId: residences[0]?.id ?? "",
+    batiment: batiments[0] ?? "",
     location: "",
     category: "" as TicketCategory | "",
     description: "",
@@ -105,18 +105,18 @@ function TicketForm({ residences, onCreated }: { residences: Residence[]; onCrea
           </p>
         )}
         <div className="grid gap-4 sm:grid-cols-3">
-          <Field id={id("residenceId")} label={t("housing.field.residence")} error={errors.residenceId}>
+          <Field id={id("batiment")} label={t("housing.field.batiment")} error={errors.batiment}>
             <Select
-              id={id("residenceId")}
-              value={values.residenceId}
-              onChange={(e) => set("residenceId", e.target.value)}
-              className={cn(errors.residenceId && "border-red-600")}
-              {...a11y("residenceId")}
+              id={id("batiment")}
+              value={values.batiment}
+              onChange={(e) => set("batiment", e.target.value)}
+              className={cn(errors.batiment && "border-red-600")}
+              {...a11y("batiment")}
             >
-              <option value="">{t("housing.field.residencePlaceholder")}</option>
-              {residences.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
+              <option value="">{t("housing.field.batimentPlaceholder")}</option>
+              {batiments.map((b) => (
+                <option key={b} value={b}>
+                  {b}
                 </option>
               ))}
             </Select>
@@ -165,7 +165,7 @@ function TicketForm({ residences, onCreated }: { residences: Residence[]; onCrea
           />
         </Field>
         <Button type="submit" disabled={isPending}>
-          {isPending ? t("housing.step.submitting") : t("housing.field.submitTicket")}
+          {isPending ? t("housing.new.submitting") : t("housing.field.submitTicket")}
         </Button>
       </form>
     </Card>
@@ -196,7 +196,7 @@ function TicketRow({ ticket, admin, onChanged }: { ticket: Ticket; admin: boolea
         <div className="min-w-0">
           <p className="text-xs font-semibold tracking-wide text-muted-foreground">{t(`housing.ticket.${ticket.category}`)}</p>
           <h3 className="text-base font-semibold">
-            {t("housing.maintenance.at", { residence: ticket.residenceName, location: ticket.location })}
+            {t("housing.maintenance.at", { batiment: ticket.batiment, location: ticket.location })}
           </h3>
         </div>
         {admin ? (
@@ -235,13 +235,18 @@ export default function MaintenancePage() {
   const { role } = useAuth();
   const admin = role === "admin";
   const tickets = useTickets();
-  const residences = useResidences();
+  const chambres = useChambres();
+
+  const batiments = useMemo(
+    () => [...new Set((chambres.data ?? []).map((c) => c.batiment))].sort((a, b) => a.localeCompare(b, "fr")),
+    [chambres.data],
+  );
 
   return (
     <div className="space-y-6">
       {!admin && (
-        <QueryBoundary query={residences} moduleName={t("module.housing")} skeleton={<Skeleton className="h-64 w-full rounded-xl" />}>
-          {(list) => <TicketForm residences={list} onCreated={tickets.refetch} />}
+        <QueryBoundary query={chambres} moduleName={t("module.housing")} skeleton={<Skeleton className="h-64 w-full rounded-xl" />}>
+          {() => <TicketForm batiments={batiments} onCreated={tickets.refetch} />}
         </QueryBoundary>
       )}
 

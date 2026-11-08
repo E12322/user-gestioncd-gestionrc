@@ -1,168 +1,225 @@
+import type { Chambre, ChambreType, Contrat, Demande, Ticket, TicketCategory, TicketStatus } from "../types";
 import { addDays } from "../utils/time";
-import type { HousingRequest, HousingRoom, RequestStatus, Residence, RoomType, Ticket, TicketCategory, TicketStatus } from "../types";
 
-const iso = (daysAgo: number) => new Date(Date.now() - daysAgo * 86_400_000).toISOString();
+/**
+ * « Base de données » en mémoire du housing-service fictif.
+ * Les règles métier (transitions, occupation, contrats) vivent dans `api/` ;
+ * ce module ne contient que les données et leur génération.
+ */
 
-interface Spec {
-  id: string;
-  name: string;
-  address: string;
-  walkMinutes: number;
-  monthlyRent: number;
-  amenities: string[];
-  floors: number;
-  perFloor: number;
-  /** Lits occupés au départ. */
-  occupied: number;
-}
+const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
 
-const SPECS: Spec[] = [
-  {
-    id: "h1",
-    name: "Résidence Les Oliviers",
-    address: "12 avenue de l'Université",
-    walkMinutes: 5,
-    monthlyRent: 120,
-    amenities: ["Wi-Fi", "Cuisine commune", "Salle d'étude", "Buanderie"],
-    floors: 4,
-    perFloor: 10,
-    occupied: 54,
-  },
-  {
-    id: "h2",
-    name: "Résidence El Manar",
-    address: "3 rue des Jasmins",
-    walkMinutes: 12,
-    monthlyRent: 95,
-    amenities: ["Wi-Fi", "Cuisine commune", "Parking vélos"],
-    floors: 3,
-    perFloor: 8,
-    occupied: 22,
-  },
-  {
-    id: "h3",
-    name: "Résidence Les Jasmins",
-    address: "Campus nord, bloc E",
-    walkMinutes: 2,
-    monthlyRent: 140,
-    amenities: ["Wi-Fi", "Salle de sport", "Salle d'étude", "Accès PMR"],
-    floors: 2,
-    perFloor: 6,
-    occupied: 20,
-  },
+const BATIMENTS: { prefix: string; name: string; floors: number }[] = [
+  { prefix: "A", name: "Bâtiment A", floors: 3 },
+  { prefix: "B", name: "Bâtiment B", floors: 2 },
+  { prefix: "C", name: "Bâtiment C", floors: 2 },
 ];
 
-/** Une chambre sur trois est individuelle, les autres sont doubles. Les lits sont occupés dans l'ordre des numéros. */
-function buildRooms(spec: Spec): HousingRoom[] {
-  const rooms: HousingRoom[] = [];
-  let left = spec.occupied;
-  for (let floor = 1; floor <= spec.floors; floor++) {
-    for (let i = 0; i < spec.perFloor; i++) {
-      const type: RoomType = i % 3 === 0 ? "single" : "double";
-      const beds = type === "single" ? 1 : 2;
-      const occupants = Math.min(beds, left);
-      left -= occupants;
-      rooms.push({
-        id: `${spec.id}-${floor}${String(i + 1).padStart(2, "0")}`,
-        residenceId: spec.id,
-        number: `${floor}${String(i + 1).padStart(2, "0")}`,
-        floor,
-        type,
-        beds,
-        occupants,
-      });
+/** Chambres 1 et 4 : SIMPLE et STUDIO ; chambres 2 et 3 : DOUBLE. */
+const typeOfSlot = (slot: number): ChambreType => (slot === 1 ? "SIMPLE" : slot === 4 ? "STUDIO" : "DOUBLE");
+const capaciteOfType = (type: ChambreType) => (type === "DOUBLE" ? 2 : 1);
+
+function buildChambres(): Chambre[] {
+  const chambres: Chambre[] = [];
+  for (const b of BATIMENTS) {
+    for (let floor = 0; floor < b.floors; floor++) {
+      for (let slot = 1; slot <= 4; slot++) {
+        const numero = `${b.prefix}-${floor}${String(slot).padStart(2, "0")}`;
+        const type = typeOfSlot(slot);
+        chambres.push({
+          id: numero,
+          numero,
+          type,
+          capacite: capaciteOfType(type),
+          disponible: true,
+          batiment: b.name,
+          etage: floor,
+          createdAt: daysAgo(120),
+          updatedAt: daysAgo(120),
+        });
+      }
     }
   }
-  return rooms;
+  return chambres;
 }
 
-const residenceBase = (): Omit<Residence, "capacity" | "occupied">[] =>
-  SPECS.map(({ id, name, address, walkMinutes, monthlyRent, amenities }) => ({ id, name, address, walkMinutes, monthlyRent, amenities }));
+type SeedDemande = Omit<Demande, "createdAt" | "updatedAt"> & { depotBack: number };
 
-const STUDENTS: Record<string, string> = {
-  "ETU-2024-0187": "Yasmine Ben Salah",
-  "ETU-2024-0211": "Amine Khelifi",
-  "ETU-2024-0302": "Inès Bouzid",
-  "ETU-2023-0644": "Omar Dridi",
-  "ETU-2025-0019": "Rim Zouari",
-  "ETU-2024-0455": "Mariem Sfaxi",
-};
-
-const residenceName = (id: string) => SPECS.find((s) => s.id === id)!.name;
-
-let qid = 0;
-const request = (
-  studentId: string,
-  residenceId: string,
-  roomType: RoomType,
-  status: RequestStatus,
-  daysAgo: number,
-  extra: Partial<HousingRequest> = {},
-): HousingRequest => ({
-  id: `q-${++qid}`,
-  studentId,
-  studentName: STUDENTS[studentId]!,
-  residenceId,
-  residenceName: residenceName(residenceId),
-  roomType,
-  entryDate: addDays(30),
-  durationMonths: 9,
-  accessibility: false,
-  notes: "",
-  status,
-  requestedAt: iso(daysAgo),
-  decidedAt: status === "pending" ? undefined : iso(Math.max(0, daysAgo - 2)),
-  ...extra,
-});
-
-const seedRequests = (): HousingRequest[] => [
-  // Yasmine (étudiante de démo) : une demande en attente, annulable pour rejouer le parcours en 4 étapes
-  request("ETU-2024-0187", "h1", "double", "pending", 8, { notes: "Proche de la bibliothèque si possible." }),
-  request("ETU-2024-0211", "h1", "single", "pending", 5),
-  // Résidence pleine : l'administrateur doit réorienter la demande vers une autre résidence
-  request("ETU-2024-0302", "h3", "single", "pending", 4, { accessibility: true, notes: "Mobilité réduite : rez-de-chaussée demandé." }),
-  request("ETU-2023-0644", "h2", "double", "pending", 2),
-  request("ETU-2025-0019", "h2", "double", "confirmed", 20, { assignedResidenceName: residenceName("h2"), assignedRoomNumber: "101" }),
-  request("ETU-2024-0455", "h1", "single", "refused", 14),
+const SEED_DEMANDES: SeedDemande[] = [
+  // Yasmine (étudiante de démo) : demande en attente, annulable.
+  {
+    id: "d-1",
+    etudiantId: "ETU-2024-0187",
+    statut: "EN_ATTENTE",
+    dateDepot: daysAgo(8),
+    dateArrivee: "2026-11-01",
+    dateDepart: "2027-06-30",
+    chambreId: null,
+    depotBack: 8,
+  },
+  {
+    id: "d-2",
+    etudiantId: "ETU-2024-0211",
+    statut: "EN_ATTENTE",
+    dateDepot: daysAgo(5),
+    dateArrivee: "2026-10-20",
+    dateDepart: "2027-06-30",
+    chambreId: null,
+    depotBack: 5,
+  },
+  // Inès : demande approuvée → chambre A-002 occupée + contrat actif.
+  {
+    id: "d-3",
+    etudiantId: "ETU-2024-0302",
+    statut: "APPROUVEE",
+    dateDepot: daysAgo(22),
+    dateArrivee: "2026-09-01",
+    dateDepart: "2027-06-30",
+    chambreId: "A-002",
+    depotBack: 22,
+  },
+  {
+    id: "d-4",
+    etudiantId: "ETU-2023-0644",
+    statut: "REFUSEE",
+    dateDepot: daysAgo(14),
+    dateArrivee: "2026-10-01",
+    dateDepart: "2027-01-31",
+    chambreId: null,
+    depotBack: 14,
+  },
+  {
+    id: "d-5",
+    etudiantId: "ETU-2025-0019",
+    statut: "ANNULEE",
+    dateDepot: daysAgo(30),
+    dateArrivee: "2026-10-01",
+    dateDepart: "2027-06-30",
+    chambreId: null,
+    depotBack: 30,
+  },
+  // Mariem : demande approuvée → chambre B-001 occupée + contrat actif.
+  {
+    id: "d-6",
+    etudiantId: "ETU-2024-0455",
+    statut: "APPROUVEE",
+    dateDepot: daysAgo(40),
+    dateArrivee: "2026-10-01",
+    dateDepart: "2027-06-30",
+    chambreId: "B-001",
+    depotBack: 40,
+  },
 ];
 
-let tid = 0;
+const SEED_CONTRATS: Contrat[] = [
+  {
+    id: "k-1",
+    residentId: "ETU-2024-0302",
+    chambreId: "A-002",
+    demandeId: "d-3",
+    dateDebut: "2026-09-01",
+    dateFin: "2027-06-30",
+    montantMensuel: 100,
+    statut: "ACTIF",
+    createdAt: daysAgo(22),
+    updatedAt: daysAgo(22),
+  },
+  {
+    id: "k-2",
+    residentId: "ETU-2024-0455",
+    chambreId: "B-001",
+    demandeId: "d-6",
+    dateDebut: "2026-10-01",
+    dateFin: "2027-06-30",
+    montantMensuel: 150,
+    statut: "ACTIF",
+    createdAt: daysAgo(40),
+    updatedAt: daysAgo(40),
+  },
+];
+
+let ticketSeq = 0;
 const ticket = (
   studentId: string,
-  residenceId: string,
+  studentName: string,
+  batiment: string,
   location: string,
   category: TicketCategory,
   description: string,
   status: TicketStatus,
-  daysAgo: number,
+  back: number,
 ): Ticket => ({
-  id: `t-${++tid}`,
+  id: `t-${++ticketSeq}`,
   studentId,
-  studentName: STUDENTS[studentId]!,
-  residenceId,
-  residenceName: residenceName(residenceId),
+  studentName,
+  batiment,
   location,
   category,
   description,
   status,
-  createdAt: iso(daysAgo),
-  updatedAt: iso(status === "open" ? daysAgo : Math.max(0, daysAgo - 1)),
+  createdAt: daysAgo(back),
+  updatedAt: daysAgo(status === "open" ? back : Math.max(0, back - 1)),
 });
 
-const seedTickets = (): Ticket[] => [
-  ticket("ETU-2024-0187", "h1", "Cuisine commune, 2e étage", "plumbing", "Le robinet de l'évier fuit en continu.", "in_progress", 6),
-  ticket("ETU-2024-0187", "h1", "Chambre 204", "internet", "Le Wi-Fi se coupe chaque soir vers 21 h.", "open", 1),
-  ticket("ETU-2024-0211", "h1", "Chambre 301", "heating", "Le radiateur ne chauffe plus.", "open", 2),
-  ticket("ETU-2025-0019", "h2", "Chambre 101", "electricity", "La prise près du bureau ne fonctionne pas.", "resolved", 10),
-  ticket("ETU-2024-0455", "h3", "Salle d'étude", "furniture", "Deux chaises sont cassées.", "resolved", 15),
+const SEED_TICKETS: Ticket[] = [
+  ticket(
+    "ETU-2024-0187",
+    "Yasmine Ben Salah",
+    "Bâtiment A",
+    "Cuisine commune, 2e étage",
+    "plumbing",
+    "Le robinet de l'évier fuit en continu.",
+    "in_progress",
+    6,
+  ),
+  ticket(
+    "ETU-2024-0187",
+    "Yasmine Ben Salah",
+    "Bâtiment A",
+    "Chambre A-302",
+    "internet",
+    "Le Wi-Fi se coupe chaque soir vers 21 h.",
+    "open",
+    1,
+  ),
+  ticket("ETU-2024-0211", "Amine Khelifi", "Bâtiment A", "Chambre A-101", "heating", "Le radiateur ne chauffe plus.", "open", 2),
+  ticket(
+    "ETU-2024-0302",
+    "Inès Bouzid",
+    "Bâtiment B",
+    "Chambre B-201",
+    "electricity",
+    "La prise près du bureau ne fonctionne pas.",
+    "resolved",
+    10,
+  ),
+  ticket("ETU-2024-0455", "Mariem Sfaxi", "Bâtiment C", "Salle d'étude", "furniture", "Deux chaises sont cassées.", "resolved", 15),
 ];
 
-/** « Base de données » en mémoire du housing-service fictif. */
+function seedChambres(): Chambre[] {
+  const chambres = buildChambres();
+  for (const occupiedNumero of ["A-002", "B-001"]) {
+    const room = chambres.find((c) => c.numero === occupiedNumero);
+    if (room) {
+      room.disponible = false;
+      room.updatedAt = daysAgo(20);
+    }
+  }
+  return chambres;
+}
+
 export const db = {
-  residences: residenceBase(),
-  rooms: SPECS.flatMap(buildRooms),
-  requests: seedRequests(),
-  tickets: seedTickets(),
+  chambres: seedChambres(),
+  demandes: SEED_DEMANDES.map(({ depotBack, ...d }) => ({
+    ...d,
+    createdAt: daysAgo(depotBack),
+    updatedAt: daysAgo(depotBack),
+  })) as Demande[],
+  contrats: [...SEED_CONTRATS],
+  tickets: [...SEED_TICKETS],
   seq: 100,
+  nextId: (prefix: string) => `${prefix}-${++db.seq}`,
   now: () => new Date().toISOString(),
+  /** Date repère pour les formulaires de démonstration. */
+  inDays: (n: number) => addDays(n),
 };
