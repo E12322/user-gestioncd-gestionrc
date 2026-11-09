@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthenticatedUser } from '../auth/jwt-auth.guard';
+import { resolveInternalKey } from './internal-key';
 
 export type ServiceName = 'chambres' | 'demandes' | 'contrats';
 
@@ -39,7 +40,11 @@ export class ProxyService {
     const url = `${this.base(service)}${req.originalUrl}`;
     const user = req.user as AuthenticatedUser | undefined;
 
-    const headers: Record<string, string> = { Accept: 'application/json' };
+    // Preuve d'identite de la passerelle aupres des microservices internes (qui refusent tout autre appelant).
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      'X-Internal-Key': resolveInternalKey(),
+    };
     if (user) {
       headers['X-User-Id'] = user.userId;
       headers['X-Role'] = user.role;

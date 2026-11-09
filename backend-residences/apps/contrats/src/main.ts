@@ -6,6 +6,7 @@ import { Transport } from '@nestjs/microservices';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { ensureSchemaExists, loadEnvFiles } from './config/ensure-schema';
+import { internalKeyMiddleware, resolveInternalKey } from './config/internal-key';
 
 /**
  * Service Contrat : application hybride.
@@ -44,7 +45,8 @@ async function bootstrap(): Promise<void> {
   });
 
   app.setGlobalPrefix(apiPrefix);
-  app.enableCors({ origin: true, credentials: true });
+  // Service INTERNE : pas de CORS (jamais appele par un navigateur) ; seule la passerelle, porteuse de la cle, est acceptee.
+  app.use(internalKeyMiddleware(resolveInternalKey()));
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -65,7 +67,8 @@ async function bootstrap(): Promise<void> {
 
   const logger = new Logger('Bootstrap');
 
-  await app.listen(port);
+  // Par defaut uniquement la boucle locale ; en conteneur BIND_HOST=0.0.0.0 (reseau interne non publie).
+  await app.listen(port, process.env.BIND_HOST ?? '127.0.0.1');
 
   // Le consommateur RabbitMQ demarre sans bloquer l'HTTP : si le broker est
   // indisponible, le service reste joignable et reessaie en arriere-plan

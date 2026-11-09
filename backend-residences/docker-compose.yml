@@ -50,6 +50,8 @@ services:
       CONTRATS_URL: http://contrats:3013
       JWT_SECRET: change-me-in-production
       JWT_ISSUER: SmartCampus
+      INTERNAL_API_KEY: change-me-internal-key
+      BIND_HOST: 0.0.0.0 # reseau interne Docker : seuls les services de ce compose peuvent les joindre (non publies)
     ports:
       - '3001:3001'
     depends_on:

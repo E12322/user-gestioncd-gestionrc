@@ -21,7 +21,13 @@ async function bootstrap(): Promise<void> {
   const port = parseInt(config.get<string>('GATEWAY_PORT', '3001'), 10);
 
   app.setGlobalPrefix(apiPrefix);
-  app.enableCors({ origin: true, credentials: true });
+  // Origines precises du front (jamais « true » avec des cookies : n'importe quel site pourrait alors appeler l'API).
+  const origins = config
+    .get<string>('CORS_ORIGINS', 'http://localhost:5173')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  app.enableCors({ origin: origins, credentials: true });
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('SmartCampus - Residences : passerelle API')

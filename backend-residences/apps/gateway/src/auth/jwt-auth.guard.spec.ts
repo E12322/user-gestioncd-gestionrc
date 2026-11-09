@@ -186,6 +186,20 @@ describe('JwtAuthGuard (passerelle)', () => {
     });
   });
 
+  it('refuse le jeton de demonstration par defaut (aucune variable AUTH_ACCEPT_DEMO_TOKEN)', () => {
+    const guard = new JwtAuthGuard(
+      reflector,
+      buildConfig({ JWT_SECRET: SECRET, JWT_ISSUER: ISSUER }),
+    );
+    expect(() =>
+      guard.canActivate(
+        buildContext({
+          authorization: `Bearer ${demoToken({ sub: 'PIRATE', role: 'admin' })}`,
+        }) as never,
+      ),
+    ).toThrow(UnauthorizedException);
+  });
+
   it('laisse passer la documentation Swagger sans jeton', () => {
     const guard = new JwtAuthGuard(reflector, devConfig);
     expect(guard.canActivate(buildContext({}, '/api/docs') as never)).toBe(

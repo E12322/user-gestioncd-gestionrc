@@ -133,11 +133,11 @@ export class JwtAuthGuard implements CanActivate {
       // pas un JWT signe valide : tente le jeton de demonstration (dev)
     }
 
+    // Le jeton de demonstration (non signe) permet de se faire passer pour n'importe qui : il n'est accepte QUE si
+    // AUTH_ACCEPT_DEMO_TOKEN=true est defini explicitement (demo isolee), jamais par defaut.
     const acceptDemo =
-      (this.config.get<string>('AUTH_ACCEPT_DEMO_TOKEN') ??
-        (this.config.get<string>('NODE_ENV') === 'production'
-          ? 'false'
-          : 'true')) === 'true';
+      this.config.get<string>('AUTH_ACCEPT_DEMO_TOKEN') === 'true' &&
+      this.config.get<string>('NODE_ENV') !== 'production';
 
     if (acceptDemo) {
       const demo = this.parseDemoToken(token);
