@@ -1,0 +1,46 @@
+# Blueprint Render (offre GRATUITE, sans carte) : user-service et agent IA.
+# Render > New > Blueprint > choisir ce depot (le fork) : les deux services sont crees, puis renseigner les variables
+# marquees `sync: false` dans le tableau de bord (ce sont des SECRETS : ne jamais les mettre dans git).
+# Details et ordre des operations : docs/DEPLOIEMENT.md
+services:
+  - type: web
+    name: smartcampus-user
+    runtime: docker
+    plan: free
+    dockerfilePath: ./SMART-COMPUS-BACK-END-ESPRIT-5SE3/Dockerfile
+    dockerContext: ./SMART-COMPUS-BACK-END-ESPRIT-5SE3
+    healthCheckPath: /health
+    envVars:
+      - { key: NODE_ENV, value: production }
+      - { key: TRUST_PROXY, value: "2" } # Vercel + Render : sans cela, la limitation de debit voit l'IP de Vercel pour tout le monde
+      - { key: EMAIL_DOMAIN, value: gmail.com }
+      - { key: FIRST_ADMIN_EMAIL, value: admin@gmail.com }
+      - { key: FIRST_ADMIN_FIRST_NAME, value: Admin }
+      - { key: FIRST_ADMIN_LAST_NAME, value: SmartCampus }
+      - { key: SMTP_HOST, value: smtp.gmail.com }
+      - { key: SMTP_PORT, value: "587" }
+      - { key: MONGODB_URI, sync: false } # chaine de connexion MongoDB Atlas
+      - { key: JWT_PRIVATE_KEY, sync: false } # PEM RSA encode en base64 (npm run keys:generate)
+      - { key: FIRST_ADMIN_PASSWORD, sync: false } # 12 caracteres minimum
+      - { key: CORS_ORIGINS, sync: false } # https://<votre-projet>.vercel.app
+      - { key: FRONTEND_URL, sync: false } # https://<votre-projet>.vercel.app
+      - { key: SMTP_USER, sync: false } # votre adresse Gmail
+      - { key: SMTP_PASS, sync: false } # mot de passe d'application Google
+      - { key: MAIL_FROM, sync: false } # "SmartCampus <votre-adresse@gmail.com>"
+
+  - type: web
+    name: smartcampus-agent
+    runtime: docker
+    plan: free
+    dockerfilePath: ./agent-service/Dockerfile
+    dockerContext: ./agent-service
+    healthCheckPath: /health
+    envVars:
+      - { key: ENVIRONMENT, value: production }
+      - { key: TTS_PROVIDER, value: none } # voix du navigateur ; Piper : voir docs/DEPLOIEMENT.md
+      - { key: AGENT_MODEL, value: "google:gemini-3.5-flash-lite,google:gemini-3.1-flash-lite,google:gemini-3.5-flash" }
+      - { key: RATE_LIMIT_PER_MINUTE, value: "10" }
+      - { key: GOOGLE_API_KEY, sync: false } # NOUVELLE cle (l'ancienne a ete exposee)
+      - { key: JWKS_URL, sync: false } # https://smartcampus-user.onrender.com/.well-known/jwks.json
+      - { key: USER_SERVICE_URL, sync: false } # https://smartcampus-user.onrender.com
+      - { key: CORS_ORIGINS, sync: false } # https://<votre-projet>.vercel.app

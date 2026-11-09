@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/svc/user/:path*", "destination": "https://smartcampus-user.onrender.com/:path*" },
+    { "source": "/svc/agent/:path*", "destination": "https://smartcampus-agent.onrender.com/:path*" },
+    { "source": "/((?!svc/|assets/).*)", "destination": "/index.html" }
+  ]
+}
