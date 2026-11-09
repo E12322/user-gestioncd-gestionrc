@@ -4,6 +4,17 @@ Projet académique d'architecture microservices - ESPRIT 5SE3 (2026).
 
 ---
 
+## Démarrage rapide et documentation
+
+- **Lancer toute l'application** : `.\scripts\lancer-tout.ps1` (ou `Lancer SmartCampus.bat` sur le Bureau) ; arrêter : `.\scripts\arreter-tout.ps1`.
+- **Passation (où en est le projet, quoi faire ensuite)** : [`HANDOFF.md`](HANDOFF.md)
+- **Lancer, tester, dépanner** : [`docs/GUIDE-LANCEMENT-ET-TESTS.md`](docs/GUIDE-LANCEMENT-ET-TESTS.md)
+- **Document technique et questions du jury** : [`docs/DOCUMENT-TECHNIQUE-JURY.md`](docs/DOCUMENT-TECHNIQUE-JURY.md)
+- **Assistant IA (construction, sécurité, questions)** : [`docs/DOCUMENT-AGENT-IA.md`](docs/DOCUMENT-AGENT-IA.md)
+- **Mise en ligne gratuite** : [`docs/DEPLOIEMENT.md`](docs/DEPLOIEMENT.md)
+
+---
+
 ## 1. Vue d'ensemble de l'architecture
 
 SmartCampus centralise l'ensemble des activités administratives, pédagogiques et associatives du campus universitaire au sein d'une architecture distribuée composée de plusieurs microservices autonomes :
