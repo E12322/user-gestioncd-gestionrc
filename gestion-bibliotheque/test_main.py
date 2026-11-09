@@ -9,6 +9,12 @@ from app.main import app
 from app.seed import seed_database
 from app import models
 
+@pytest.fixture(autouse=True)
+def demo_identity(monkeypatch, request):
+    """Les tests historiques s'identifient par en-têtes X-User-* : identité de démo activée, sauf pour les tests @pytest.mark.secure."""
+    monkeypatch.setenv("AUTH_ALLOW_INSECURE_IDENTITY", "false" if request.node.get_closest_marker("secure") else "true")
+
+
 TEST_DB_URL = "sqlite:///:memory:"
 engine = create_engine(
     TEST_DB_URL,
@@ -112,3 +118,79 @@ def test_return_loan_and_trigger_reservation(client):
     my_lib = client.get("/loans/me", headers={"X-User-Id": "ETU-2025-0019", "X-User-Role": "student"}).json()
     r1 = next(r for r in my_lib["reservations"] if r["id"] == "r-1")
     assert r1["status"] == "ready"
+
+
+# ---------- Sécurité de l'authentification (identité de démo DÉSACTIVÉE) ----------
+from datetime import datetime, timedelta, timezone  # noqa: E402
+from jose import jwt as jose_jwt  # noqa: E402
+from app.config import JWT_SECRET, JWT_ALGORITHM, JWT_ISSUER, JWT_AUDIENCE  # noqa: E402
+
+pytestmark_secure = pytest.mark.secure
+
+
+def _token(role="student", sub="ETU-2026-0002", **override):
+    claims = {"sub": sub, "name": "Farah", "role": role, "iss": JWT_ISSUER, "aud": JWT_AUDIENCE,
+              "exp": datetime.now(timezone.utc) + timedelta(hours=1)}
+    claims.update(override)
+    return jose_jwt.encode(claims, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+COOKIE_HEADERS = {"Origin": "http://localhost:5173", "X-Auth-Mode": "cookie"}
+NEW_BOOK = {"title": "Livre de test", "author": "Auteur", "isbn": "978-1-23456-789-7", "category": "Informatique",
+            "year": 2024, "copies": 2, "description": ""}
+
+
+@pytest.mark.secure
+def test_sans_jeton_401(client):
+    assert client.get("/books").status_code == 401
+
+
+@pytest.mark.secure
+def test_en_tetes_x_user_ignores_sans_jeton(client):
+    res = client.get("/loans", headers={"X-User-Id": "PIRATE", "X-User-Role": "admin"})
+    assert res.status_code == 401
+
+
+@pytest.mark.secure
+def test_cookie_admin_peut_lister_les_prets(client):
+    res = client.get("/loans", cookies={"sc_access": _token("admin", "ADM-2026-0002")})
+    assert res.status_code == 200
+
+
+@pytest.mark.secure
+def test_cookie_etudiant_ne_peut_pas_lister_les_prets(client):
+    res = client.get("/loans", cookies={"sc_access": _token("student")})
+    assert res.status_code == 403
+
+
+@pytest.mark.secure
+def test_cookie_admin_ajoute_un_livre_avec_en_tetes_csrf(client):
+    res = client.post("/books", json=NEW_BOOK, cookies={"sc_access": _token("admin", "ADM-2026-0002")}, headers=COOKIE_HEADERS)
+    assert res.status_code == 201
+
+
+@pytest.mark.secure
+def test_ecriture_par_cookie_sans_en_tete_csrf_refusee(client):
+    res = client.post("/books", json=NEW_BOOK, cookies={"sc_access": _token("admin", "ADM-2026-0002")},
+                      headers={"Origin": "http://localhost:5173"})
+    assert res.status_code == 403
+
+
+@pytest.mark.secure
+def test_ecriture_par_cookie_depuis_origine_etrangere_refusee(client):
+    res = client.post("/books", json=NEW_BOOK, cookies={"sc_access": _token("admin", "ADM-2026-0002")},
+                      headers={"Origin": "https://pirate.example", "X-Auth-Mode": "cookie"})
+    assert res.status_code == 403
+
+
+@pytest.mark.secure
+def test_jeton_mauvaise_audience_ou_signature_refuse(client):
+    assert client.get("/books", cookies={"sc_access": _token(aud="autre")}).status_code == 401
+    forged = jose_jwt.encode({"sub": "x", "role": "admin", "iss": JWT_ISSUER, "aud": JWT_AUDIENCE}, "autre-secret", algorithm=JWT_ALGORITHM)
+    assert client.get("/books", headers={"Authorization": f"Bearer {forged}"}).status_code == 401
+
+
+@pytest.mark.secure
+def test_bearer_ecrit_sans_en_tetes_csrf(client):
+    res = client.post("/books", json=NEW_BOOK, headers={"Authorization": f"Bearer {_token('admin', 'ADM-2026-0002')}"})
+    assert res.status_code == 201

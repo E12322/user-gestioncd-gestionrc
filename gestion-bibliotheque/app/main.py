@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.seed import seed_database
 from app.routes import router
+from app.security import cors_origins
 from app.eureka import init_eureka, stop_eureka
 
 @asynccontextmanager
@@ -30,7 +31,7 @@ app = FastAPI(
 # Configuration CORS pour intégration fluide avec le Frontend React & Gateway
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins(),  # origines précises (CORS_ORIGINS) : "*" avec cookies reflèterait n'importe quel site
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
