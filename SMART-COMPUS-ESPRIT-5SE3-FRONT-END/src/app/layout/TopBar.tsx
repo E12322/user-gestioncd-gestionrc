@@ -54,7 +54,6 @@ export function TopBar() {
         </form>
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2 md:ml-0">
-
           <Button
             variant="ghost"
             size="icon"

@@ -78,8 +78,10 @@ describe("client de l'assistant", () => {
   });
 
   it("confirme et annule une action par son identifiant (encodé)", async () => {
-    fetchMock.mockResolvedValueOnce(ok({ action: { status: "done" } })).mockResolvedValueOnce(ok(null, 204));
-    await expect(confirmAssistantAction("a/b c")).resolves.toBe("done");
+    fetchMock
+      .mockResolvedValueOnce(ok({ action: { status: "done", summary: "Réservation enregistrée." } }))
+      .mockResolvedValueOnce(ok(null, 204));
+    await expect(confirmAssistantAction("a/b c")).resolves.toEqual({ status: "done", summary: "Réservation enregistrée." });
     await expect(cancelAssistantAction("id1")).resolves.toBeUndefined();
     expect((fetchMock.mock.calls[0] as [string])[0]).toBe(`${AGENT_URL}/agent/actions/a%2Fb%20c/confirm`);
     expect((fetchMock.mock.calls[1] as [string])[0]).toBe(`${AGENT_URL}/agent/actions/id1/cancel`);

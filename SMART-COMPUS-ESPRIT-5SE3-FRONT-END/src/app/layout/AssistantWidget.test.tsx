@@ -91,7 +91,7 @@ describe("assistant intégré à l'application", () => {
       summary: "Remplacer votre numéro par +216 22 222 222",
     };
     ask.mockResolvedValue(reply({ answer: "Je prépare la modification.", actions: [action] }));
-    confirm.mockResolvedValue("done");
+    confirm.mockResolvedValue({ status: "done", summary: null });
     render(wrap(<AssistantWidget />));
     const user = await openAndAsk("Change mon numéro");
     expect(await screen.findByText(/Remplacer votre numéro/)).toBeInTheDocument();
@@ -100,6 +100,46 @@ describe("assistant intégré à l'application", () => {
     expect(confirm).toHaveBeenCalledWith("act-1");
     expect(await screen.findByText("Modification effectuée.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Confirmer" })).not.toBeInTheDocument();
+  });
+
+  it("montre les outils que l'agent a réellement utilisés", async () => {
+    ask.mockResolvedValue(
+      reply({
+        actions: [
+          { tool: "list_rooms", status: "done" },
+          { tool: "check_room_availability", status: "done" },
+          { tool: "list_rooms", status: "done" },
+          { tool: "propose_room_reservation", status: "needs_confirmation", confirmation_id: "act-9", summary: "Réserver Salle C12" },
+        ],
+      }),
+    );
+    render(wrap(<AssistantWidget />));
+    await openAndAsk("Réserve-moi une salle");
+    const line = await screen.findByTestId("assistant-tools");
+    expect(line).toHaveTextContent("Outils utilisés : Salles · Disponibilité des salles"); // sans doublon, sans l'outil à confirmer
+    expect(screen.getByText(/Réserver Salle C12/)).toBeInTheDocument();
+  });
+
+  it("affiche le résultat réel de l'action confirmée, ou la raison du refus du service", async () => {
+    const action = (id: string) => ({
+      tool: "propose_room_reservation",
+      status: "needs_confirmation" as const,
+      confirmation_id: id,
+      summary: "Réserver Salle C12",
+    });
+    ask.mockResolvedValueOnce(reply({ actions: [action("act-ok")] }));
+    confirm.mockResolvedValueOnce({ status: "done", summary: "Réservation enregistrée : Salle C12 (en attente de validation)." });
+    render(wrap(<AssistantWidget />));
+    const user = await openAndAsk("Réserve");
+    await user.click(await screen.findByRole("button", { name: "Confirmer" }));
+    expect(await screen.findByText(/Réservation enregistrée : Salle C12/)).toBeInTheDocument();
+
+    ask.mockResolvedValueOnce(reply({ actions: [action("act-ko")] }));
+    confirm.mockResolvedValueOnce({ status: "error", summary: "Demande refusée par le service resources : Salle déjà réservée." });
+    await user.type(screen.getByRole("textbox", { name: "Votre question…" }), "Encore");
+    await user.click(screen.getByRole("button", { name: "Envoyer" }));
+    await user.click(await screen.findByRole("button", { name: "Confirmer" }));
+    expect(await screen.findByText(/Salle déjà réservée/)).toBeInTheDocument();
   });
 
   it("annule une modification proposée sans l'exécuter", async () => {

@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 from pydantic_ai.exceptions import ModelRateLimitError, ModelUnavailableError, UnexpectedModelBehavior
 from pydantic_ai.messages import BinaryContent, ModelMessage, ModelRequest, UserPromptPart
 
+from app.actions import EXECUTORS
 from app.agent import AgentDeps, build_agent
 from app.auth import Principal, current_principal
 from app.config import Settings, get_settings
@@ -38,6 +39,15 @@ def get_agent():
     if _agent is None:
         _agent = build_agent(get_settings().agent_model)
     return _agent
+
+
+def make_campus(settings: Settings, principal: Principal) -> CampusClient:
+    """Client des modules du campus, porteur du jeton DE L'UTILISATEUR (jamais d'identite propre a l'agent)."""
+    return CampusClient(
+        academic_url=settings.academic_service_url, resources_url=settings.resources_service_url,
+        residences_url=settings.residences_service_url, library_url=settings.library_service_url,
+        student_life_url=settings.student_life_service_url, token=principal.token,
+    )
 
 
 def get_store() -> ConversationStore:
@@ -130,11 +140,7 @@ def create_app() -> FastAPI:
         store = get_store()
         history = await store.load(principal.sub, cid)
         users = UserServiceClient(settings.user_service_url, principal.token)
-        campus = CampusClient(
-            academic_url=settings.academic_service_url, resources_url=settings.resources_service_url,
-            residences_url=settings.residences_service_url, library_url=settings.library_service_url,
-            student_life_url=settings.student_life_service_url, token=principal.token,
-        )
+        campus = make_campus(settings, principal)
         deps = AgentDeps(principal=principal, users=users, campus=campus)
         try:
             result = await get_agent().run(prompt, deps=deps, message_history=history)
@@ -184,18 +190,24 @@ def create_app() -> FastAPI:
         if action is None:  # inconnue, expiree, deja utilisee ou d'un autre : meme reponse
             raise HTTPException(404, "Action introuvable ou expiree")
         users = UserServiceClient(settings.user_service_url, principal.token)
+        campus = make_campus(settings, principal)
+        summary = action.summary
         try:
             if action.tool == "update_my_phone":
                 await users.update_phone(principal.sub, action.args["phone"])
+            elif action.tool in EXECUTORS:  # reservation de salle, decision, pret, adhesion... (jeton de l'utilisateur)
+                summary = await EXECUTORS[action.tool](campus, action.args)
             else:  # ne devrait pas arriver : on n'execute que ce qu'on connait
                 raise HTTPException(400, "Action non supportee")
             status = "done"
         except ToolError as exc:
-            status = "denied" if "refus" in str(exc).lower() else "error"
+            status = "denied" if "acces refuse" in str(exc).lower() else "error"
+            summary = str(exc)  # message metier lisible (jamais de trace technique)
         finally:
             await users.aclose()
+            await campus.aclose()
         log.info("agent_confirm sub=%s tool=%s status=%s", principal.sub, action.tool, status)
-        done = Action(tool=action.tool, args=dict(action.args), status=status, summary=action.summary)
+        done = Action(tool=action.tool, args=dict(action.args), status=status, summary=summary)
         return ConfirmResult(action=done)
 
     @app.post("/agent/actions/{action_id}/cancel", status_code=204)

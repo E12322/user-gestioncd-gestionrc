@@ -105,9 +105,18 @@ export function askAssistant(req: AssistantRequest, signal?: AbortSignal): Promi
 }
 
 /** Exécute une modification PROPOSÉE par l'assistant, après clic de l'utilisateur (usage unique côté serveur). */
-export async function confirmAssistantAction(id: string): Promise<AssistantActionStatus> {
-  const res = await post<{ action: { status: AssistantActionStatus } }>(`/agent/actions/${encodeURIComponent(id)}/confirm`, {});
-  return res.action.status;
+export interface AssistantActionResult {
+  status: AssistantActionStatus;
+  /** Phrase lisible : résultat réel (« Réservation enregistrée… ») ou raison du refus renvoyée par le service. */
+  summary: string | null;
+}
+
+export async function confirmAssistantAction(id: string): Promise<AssistantActionResult> {
+  const res = await post<{ action: { status: AssistantActionStatus; summary?: string | null } }>(
+    `/agent/actions/${encodeURIComponent(id)}/confirm`,
+    {},
+  );
+  return { status: res.action.status, summary: res.action.summary ?? null };
 }
 
 export function cancelAssistantAction(id: string): Promise<void> {

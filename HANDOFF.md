@@ -44,8 +44,8 @@ La branche `main` du dépôt de l'équipe **n'a pas ce travail** : tout est sur 
 | Résidences | oui | non | passerelle + clé interne des microservices (9 nov.) | 75 |
 | Bibliothèque | oui | non | cookie, fin de l'identité par défaut (9 nov.) | 16 |
 | Vie étudiante | oui | non (Dockerfile et service Render prêts) | catalogue public voulu ; reste protégé | n/a |
-| Assistant IA | oui | **oui** (profil, règlement) | oui | 95 |
-| Front | oui | **oui** | n/a | 58 |
+| Assistant IA (**agent** : 20 outils, 6 actions avec confirmation) | oui | **oui** (profil, règlement) | oui | 119 |
+| Front | oui | **oui** | n/a | 60 |
 
 **Vérifié dans un navigateur automatisé (Edge sans interface), en admin** : connexion, les six modules, ajout d'un livre, validation d'une réservation, pages de la vie étudiante, assistant. **Non vérifié** : aucune vue enseignant ou étudiant à l'écran (mots de passe inconnus ; les rôles ont été testés par API avec des jetons de test), mobile, clavier, lecteur d'écran, voix dans le navigateur.
 
@@ -58,7 +58,8 @@ La branche `main` du dépôt de l'équipe **n'a pas ce travail** : tout est sur 
 5. Mise en ligne gratuite : `render.yaml`, `vercel.json`, Dockerfiles, `docs/DEPLOIEMENT.md` (`34c6235`).
 6. Correctifs de routage du front : clubs vers la vie étudiante, `/rooms` et `/reservations` vers les ressources (`6144ab4`, `3f2d45d`).
 7. **Audit de sécurité des modules** et corrections : résidences (cookie, `855aa44` ; clé interne, jeton de démonstration, CORS, `129bacc`), bibliothèque (`a59449d`), ressources (`353faed`), académique (`129bacc`).
-8. Documents : `docs/DOCUMENT-TECHNIQUE-JURY.md`, `docs/DOCUMENT-AGENT-IA.md`, `docs/GUIDE-LANCEMENT-ET-TESTS.md`, ce fichier ; scripts de lancement.
+8. **L'assistant devient un agent** (10 novembre) : actions avec confirmation (réserver une salle, valider une réservation, emprunter ou réserver un livre, rejoindre un club), vérifications avant proposition, affichage des outils utilisés et du résultat réel dans le widget ; 24 tests et 5 cas d'évaluation adverse ajoutés ; **évaluation rejouée : 14 sur 14**. Vérifié avec le vrai Gemini et les vrais services (réservation en une phrase, validation par l'admin).
+9. Documents : `docs/DOCUMENT-TECHNIQUE-JURY.md`, `docs/DOCUMENT-AGENT-IA.md`, `docs/GUIDE-LANCEMENT-ET-TESTS.md`, ce fichier ; scripts de lancement.
 
 ---
 
@@ -71,7 +72,7 @@ La branche `main` du dépôt de l'équipe **n'a pas ce travail** : tout est sur 
 5. **Voir l'interface avec de vrais comptes enseignant et étudiant** (réservation de salle, résidences en étudiant, notes en enseignant).
 6. **Double authentification** (non faite).
 7. **Identifiants de l'académique** : l'identifiant numérique est dérivé des chiffres du jeton (`ETU-2026-0002` et `ADM-2026-0002` donnent le même nombre). À remplacer par l'identifiant texte.
-8. Agent IA : rejouer les évaluations adverses (`python -m evals.run_evals`) après l'ajout des outils ; écriture sur les autres modules avec confirmation ; recherche sémantique ; faire valider le contenu du règlement par l'administration.
+8. Agent IA : actions supplémentaires avec confirmation (inscription à un événement, demande de chambre, justification d'absence), alertes proactives (prêt en retard), recherche sémantique, voix en ligne, faire valider le contenu du règlement par l'administration. Rejouer `python -m evals.run_evals` après tout changement de modèle ou de prompt.
 9. Six fichiers du module Résidences (`RoomPicker`, `MyRequestPage`…) existent sur d'autres branches mais pas sur la base d'intégration : confirmer avec leur auteur s'ils doivent revenir.
 
 ---

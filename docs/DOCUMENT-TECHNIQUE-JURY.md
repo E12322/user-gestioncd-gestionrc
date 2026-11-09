@@ -118,7 +118,7 @@ Cet audit est aussi ce qui rend l'agent crédible : il relaie le jeton de l'util
 
 ## 6. L'assistant IA (résumé)
 
-Un bouton dans toute l'application. Il lit le profil, le règlement (RAG filtré par rôle) et, en lecture seule, les cours, salles, chambres, livres, emprunts, clubs et événements. Il ne peut **proposer** qu'un changement de téléphone, exécuté après clic. Il n'a aucun droit propre : chaque appel porte le jeton de l'utilisateur. Évaluation adverse sur le vrai modèle : 9 cas sur 9 (7 novembre). Détail complet : `DOCUMENT-AGENT-IA.md`.
+Un **agent**, pas un simple chatbot : un bouton dans toute l'application. Il lit le profil, le règlement (RAG filtré par rôle) et les cours, salles, chambres, livres, emprunts, clubs et événements ; surtout, il **accomplit des tâches en plusieurs étapes** : « réserve-moi une salle demain à 10h » déclenche la recherche des salles, la vérification de la disponibilité et de la capacité, puis une **proposition** de réservation, exécutée **seulement après un clic**. Six actions : réserver une salle, valider ou refuser une réservation (administrateur), emprunter un livre, réserver un livre indisponible, rejoindre un club, changer son téléphone. Il n'a aucun droit propre : chaque appel porte le jeton de l'utilisateur, et les outils interdits à son rôle n'existent pas pour le modèle. Évaluation adverse sur le vrai modèle : **14 cas sur 14** (10 novembre), dont une injection cachée dans le motif d'une réservation. Détail complet : `DOCUMENT-AGENT-IA.md`.
 
 ---
 
@@ -140,9 +140,9 @@ Un bouton dans toute l'application. Il lit le profil, le règlement (RAG filtré
 | Ressources (Spring) | 21 | tous passent |
 | Résidences (NestJS) | 75 | tous passent |
 | Bibliothèque (FastAPI) | 16 | tous passent |
-| Agent IA (Python) | 95 | tous passent |
-| Front (React) | 58 | tous passent |
-| **Total** | **384** | |
+| Agent IA (Python) | 119 | tous passent |
+| Front (React) | 60 | tous passent |
+| **Total** | **410** | |
 
 Couverture du user-service mesurée le 2 novembre (74 tests alors) : 96,9 % des lignes, 88,2 % des branches. Vérifications dans un **navigateur réel automatisé** (Edge sans interface) : connexion, six modules, ajout d'un livre, validation d'une réservation, assistant. Dépôt d'intégration : branche `integration-final`.
 
@@ -228,11 +228,14 @@ Pour qu'un module reste autonome : pas de jointure, pas de migration commune. Le
 
 ### D. Agent IA
 
+**L'assistant est-il un simple chatbot ?**
+Non, c'est un agent. Un chatbot répond ; celui-ci choisit parmi 20 outils, les enchaîne pour accomplir une tâche (chercher une salle, vérifier la disponibilité, contrôler la capacité, préparer la réservation), agit au nom de l'utilisateur sur de vrais services, et passe par un contrôle humain avant toute écriture. Nous l'avons vérifié avec le vrai modèle : une enseignante demande une réservation en une phrase, l'agent enchaîne trois outils, la réservation n'existe qu'après le clic, et l'administrateur la valide par la conversation.
+
 **Qu'est-ce qui rend l'agent sûr ?**
-Il n'a aucun droit propre (il relaie le jeton de l'utilisateur), les outils interdits lui sont cachés, il ne peut qu'**proposer** une écriture, et les services restent l'autorité finale. La sécurité ne dépend pas de la bonne volonté du modèle.
+Il n'a aucun droit propre (il relaie le jeton de l'utilisateur), les outils interdits lui sont cachés, il ne peut que **proposer** une écriture (vérifiée d'abord : capacité, conflits, stock, places), exécutée après un clic avec les paramètres enregistrés côté serveur, et les services restent l'autorité finale. La sécurité ne dépend pas de la bonne volonté du modèle.
 
 **Peut-il se tromper ?**
-Oui, comme tout modèle. Atténuations : il ne connaît que ce que renvoient ses outils, il cite ses sources, il dit « non publié » plutôt que d'inventer, et une évaluation adverse (9 cas) vérifie les tentatives de manipulation.
+Oui, comme tout modèle. Atténuations : il ne connaît que ce que renvoient ses outils, il cite ses sources, il dit « non publié » plutôt que d'inventer, et une évaluation adverse (14 cas, vrai modèle) vérifie les tentatives de manipulation.
 
 **Les données de l'utilisateur partent-elles chez un tiers ?**
 Oui : la question et les résultats d'outils sont envoyés au fournisseur du modèle (Google, offre gratuite). Il faut vérifier ses conditions avant un usage réel. Le modèle se change par simple configuration.
@@ -251,7 +254,7 @@ Le service gratuit se réveille : 30 à 60 secondes. Prévoir un « réveil » a
 ### F. Qualité et méthode
 
 **Comment prouvez-vous que ça marche ?**
-384 tests automatiques, plus des essais dans un navigateur réel automatisé (connexion, six modules, ajout d'un livre, validation d'une réservation, assistant). Chaque faille corrigée a des tests qui échouaient avant.
+410 tests automatiques, plus des essais dans un navigateur réel automatisé (connexion, six modules, ajout d'un livre, validation d'une réservation, assistant) et une évaluation adverse de l'agent sur le vrai modèle (14 cas). Chaque faille corrigée a des tests qui échouaient avant.
 
 **Pourquoi tester les refus ?**
 Un test qui vérifie seulement qu'un administrateur réussit ne prouve rien sur la sécurité. Les tests envoient des requêtes sans jeton, avec un jeton étudiant, forgé, d'une autre audience, ou depuis une autre origine, et vérifient 401 ou 403.

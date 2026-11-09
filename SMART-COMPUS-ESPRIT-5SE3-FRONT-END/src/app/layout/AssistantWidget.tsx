@@ -65,6 +65,12 @@ const fileToBase64 = (file: File) =>
     reader.readAsDataURL(file);
   });
 
+/** Libellés des outils réellement appelés par l'agent (ce qui montre qu'il agit, pas seulement qu'il répond). */
+function toolLabels(actions: AssistantAction[], t: (key: string) => string): string[] {
+  const names = actions.filter((a) => a.status !== "needs_confirmation").map((a) => a.tool);
+  return [...new Set(names)].map((n) => t(`assistant.tool.${n}`));
+}
+
 function AssistantChat() {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -76,6 +82,7 @@ function AssistantChat() {
   const [speak, setSpeak] = useState(() => readFlag(SPEAK_KEY));
   const [listening, setListening] = useState(false);
   const [resolved, setResolved] = useState<Record<string, ResolveState>>({});
+  const [results, setResults] = useState<Record<string, string>>({});
   const nextId = useRef(1);
   const abortRef = useRef<AbortController | null>(null);
   const recognitionRef = useRef<RecognitionLike | null>(null);
@@ -238,8 +245,9 @@ function AssistantChat() {
     setResolved((r) => ({ ...r, [id]: "pending" }));
     try {
       if (accept) {
-        const status = await confirmAssistantAction(id);
-        setResolved((r) => ({ ...r, [id]: status === "done" ? "confirmed" : "failed" }));
+        const res = await confirmAssistantAction(id);
+        if (res.summary) setResults((r) => ({ ...r, [id]: res.summary as string }));
+        setResolved((r) => ({ ...r, [id]: res.status === "done" ? "confirmed" : "failed" }));
       } else {
         await cancelAssistantAction(id);
         setResolved((r) => ({ ...r, [id]: "cancelled" }));
@@ -254,6 +262,7 @@ function AssistantChat() {
     setMessages([]);
     setConversationId(null);
     setResolved({});
+    setResults({});
     setImage(null);
     setBusy(false);
   };
@@ -330,6 +339,11 @@ function AssistantChat() {
                     <span className="font-medium">{t("assistant.sources")} :</span> {m.reply.sources.join(" · ")}
                   </p>
                 )}
+                {m.reply && toolLabels(m.reply.actions, t).length > 0 && (
+                  <p className="text-xs text-muted-foreground" data-testid="assistant-tools">
+                    <span className="font-medium">{t("assistant.toolsUsed")} :</span> {toolLabels(m.reply.actions, t).join(" · ")}
+                  </p>
+                )}
                 {m.reply?.actions
                   .filter((a) => a.status === "needs_confirmation" && a.confirmation_id)
                   .map((a) => {
@@ -354,9 +368,9 @@ function AssistantChat() {
                           </div>
                         ) : (
                           <p role="status" className={state === "confirmed" ? "text-emerald-700" : "text-muted-foreground"}>
-                            {state === "confirmed" && t("assistant.confirmed")}
+                            {state === "confirmed" && (results[a.confirmation_id!] ?? t("assistant.confirmed"))}
                             {state === "cancelled" && t("assistant.cancelled")}
-                            {state === "failed" && t("assistant.confirmFailed")}
+                            {state === "failed" && (results[a.confirmation_id!] ?? t("assistant.confirmFailed"))}
                           </p>
                         )}
                       </div>
