@@ -6,6 +6,7 @@
   "rewrites": [
     { "source": "/svc/user/:path*", "destination": "https://smartcampus-user.onrender.com/:path*" },
     { "source": "/svc/agent/:path*", "destination": "https://smartcampus-agent.onrender.com/:path*" },
+    { "source": "/svc/vie/:path*", "destination": "https://smartcampus-vie.onrender.com/:path*" },
     { "source": "/((?!svc/|assets/).*)", "destination": "/index.html" }
   ]
 }

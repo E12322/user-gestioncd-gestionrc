@@ -29,6 +29,21 @@ services:
       - { key: MAIL_FROM, sync: false } # "SmartCampus <votre-adresse@gmail.com>"
 
   - type: web
+    name: smartcampus-vie
+    runtime: docker
+    plan: free
+    dockerfilePath: ./vie-etudiante/Dockerfile
+    dockerContext: ./vie-etudiante
+    healthCheckPath: /health
+    envVars:
+      - { key: SECURITY_ENFORCE_AUTH, value: "true" } # exige le JWT du user-service sur les routes protegees
+      - { key: JWT_ISSUER, value: smartcampus-user-service }
+      - { key: JWT_AUDIENCE, value: smartcampus }
+      - { key: MONGODB_URI, sync: false } # meme cluster Atlas, base smartcampus_student_life
+      - { key: JWKS_URI, sync: false } # https://smartcampus-user.onrender.com/.well-known/jwks.json
+      - { key: CORS_ORIGIN, sync: false } # https://<votre-projet>.vercel.app
+
+  - type: web
     name: smartcampus-agent
     runtime: docker
     plan: free
@@ -43,4 +58,5 @@ services:
       - { key: GOOGLE_API_KEY, sync: false } # NOUVELLE cle (l'ancienne a ete exposee)
       - { key: JWKS_URL, sync: false } # https://smartcampus-user.onrender.com/.well-known/jwks.json
       - { key: USER_SERVICE_URL, sync: false } # https://smartcampus-user.onrender.com
+      - { key: STUDENT_LIFE_SERVICE_URL, sync: false } # https://smartcampus-vie.onrender.com (clubs et evenements pour l'assistant)
       - { key: CORS_ORIGINS, sync: false } # https://<votre-projet>.vercel.app

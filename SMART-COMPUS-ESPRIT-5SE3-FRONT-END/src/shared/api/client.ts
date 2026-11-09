@@ -53,6 +53,11 @@ const SERVICE_ROUTES: ReadonlyArray<{ prefixes: string[]; baseUrl: string }> = [
     prefixes: ["/books", "/loans", "/reservations"],
     baseUrl: import.meta.env.VITE_LIBRARY_API_BASE_URL ?? "http://localhost:8082",
   },
+  // Vie étudiante (Spring Boot sur 4005) : /clubs, /events, /memberships → STUDENT_LIFE_API_BASE_URL
+  {
+    prefixes: ["/clubs", "/events", "/memberships"],
+    baseUrl: import.meta.env.VITE_STUDENT_LIFE_API_BASE_URL ?? "http://localhost:4005",
+  },
 ];
 
 const baseUrlFor = (path: string): string => {
