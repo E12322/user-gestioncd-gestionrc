@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -9,6 +10,30 @@ import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import * as jwt from 'jsonwebtoken';
 import { IS_PUBLIC_KEY } from '../common/decorators/public.decorator';
+
+/** Cookie `httpOnly` pose par le service Utilisateurs (session du navigateur). */
+const ACCESS_COOKIE = 'sc_access';
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/** Lit un cookie dans l'en-tete `Cookie` (la passerelle n'embarque pas cookie-parser). */
+export function readCookie(
+  header: string | undefined,
+  name: string,
+): string | undefined {
+  if (!header) return undefined;
+  for (const part of header.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq > 0 && part.slice(0, eq).trim() === name) {
+      const raw = part.slice(eq + 1).trim();
+      try {
+        return decodeURIComponent(raw) || undefined;
+      } catch {
+        return raw || undefined;
+      }
+    }
+  }
+  return undefined;
+}
 
 export interface AuthenticatedUser {
   userId: string;
@@ -47,13 +72,47 @@ export class JwtAuthGuard implements CanActivate {
     const path: string = request.path ?? request.url ?? '';
     if (path.startsWith('/api/docs')) return true;
 
+    // 1. En-tete Bearer (services, scripts) ; 2. sinon cookie httpOnly du navigateur.
     const authHeader: string | undefined = request.headers?.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
+    let token: string | undefined;
+    let viaCookie = false;
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.slice('Bearer '.length).trim();
+    } else {
+      token = readCookie(request.headers?.cookie, ACCESS_COOKIE);
+      viaCookie = token !== undefined;
+    }
+    if (!token) {
       throw new UnauthorizedException('Jeton d authentification manquant');
     }
-    const token = authHeader.slice('Bearer '.length).trim();
+    if (viaCookie && !SAFE_METHODS.has(String(request.method ?? 'GET'))) {
+      this.assertSameAppRequest(request);
+    }
     request.user = this.verify(token);
     return true;
+  }
+
+  /**
+   * Protection CSRF d'une ecriture authentifiee par COOKIE : le navigateur joint le cookie tout seul, donc on exige
+   * l'en-tete `X-Auth-Mode: cookie` (que le front envoie) ET une origine autorisee (CORS_ORIGINS).
+   */
+  private assertSameAppRequest(request: {
+    headers?: Record<string, string | undefined>;
+  }): void {
+    const allowed = (
+      this.config.get<string>('CORS_ORIGINS') ?? 'http://localhost:5173'
+    )
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean);
+    const origin = request.headers?.origin;
+    if (
+      request.headers?.['x-auth-mode'] !== 'cookie' ||
+      !origin ||
+      !allowed.includes(origin)
+    ) {
+      throw new ForbiddenException('Requete refusee (origine non autorisee)');
+    }
   }
 
   private verify(token: string): AuthenticatedUser {
