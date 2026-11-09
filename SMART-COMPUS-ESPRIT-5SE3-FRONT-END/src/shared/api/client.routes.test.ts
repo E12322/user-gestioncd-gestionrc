@@ -16,7 +16,8 @@ describe("routage des appels API vers les microservices", () => {
     vi.stubEnv("VITE_LIBRARY_API_BASE_URL", "http://library.test");
     vi.stubEnv("VITE_RESIDENCES_API_BASE_URL", "http://residences.test/api");
     vi.stubEnv("VITE_STUDENT_LIFE_API_BASE_URL", "/svc/vie");
-    vi.stubEnv("VITE_REAL_API_PREFIXES", "/auth,/users,/clubs,/events,/memberships,/reports,/books,/chambres,/academic");
+    vi.stubEnv("VITE_RESOURCES_API_BASE_URL", "http://resources.test/api");
+    vi.stubEnv("VITE_REAL_API_PREFIXES", "/auth,/users,/clubs,/events,/memberships,/reports,/books,/chambres,/academic,/rooms,/reservations");
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -38,6 +39,12 @@ describe("routage des appels API vers les microservices", () => {
     ["/memberships/mine", "/svc/vie/memberships/mine"],
     ["/events/my-registrations", "/svc/vie/events/my-registrations"],
     ["/reports/clubs/k1?year=2026", "/svc/vie/reports/clubs/k1?year=2026"],
+    ["/rooms", "http://resources.test/api/rooms"],
+    ["/rooms/7/availability?date=2026-11-10", "http://resources.test/api/rooms/7/availability?date=2026-11-10"],
+    ["/reservations", "http://resources.test/api/reservations"],
+    ["/reservations?status=PENDING", "http://resources.test/api/reservations?status=PENDING"],
+    ["/reservations/12/status", "http://resources.test/api/reservations/12/status"],
+    ["/reservations/5", "http://library.test/reservations/5"], // annulation d'une réservation de LIVRE : reste à la bibliothèque
     ["/users", "/svc/user/users"],
     ["/books", "http://library.test/books"],
     ["/chambres", "http://residences.test/api/chambres"],

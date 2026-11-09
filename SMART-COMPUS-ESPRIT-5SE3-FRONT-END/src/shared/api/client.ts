@@ -41,8 +41,16 @@ const isRealRoute = (path: string) => REAL_PREFIXES.some((p: string) => path ===
  * - tout le reste (académique, etc.) → API_BASE_URL
  * Le jour où une API Gateway unique existe, il suffit d'aligner les deux variables.
  */
-const SERVICE_ROUTES: ReadonlyArray<{ prefixes: string[]; baseUrl: string }> = [
+const SERVICE_ROUTES: ReadonlyArray<{ prefixes: string[]; baseUrl: string; pattern?: RegExp }> = [
   { prefixes: ["/auth", "/users", "/roles", "/login-history"], baseUrl: USER_API_BASE_URL },
+  // Ressources campus (Spring Boot sur 8080, préfixe /api) : /rooms, /reservations (liste, création) et
+  // /reservations/{id}/status → RESOURCES_API_BASE_URL. Évalué AVANT la bibliothèque, qui garde `DELETE /reservations/{id}`
+  // (annulation d'une réservation de livre) : on distingue donc par un motif et non par le seul préfixe.
+  {
+    prefixes: [],
+    pattern: /^\/(rooms(\/|\?|$)|reservations(\?.*)?$|reservations\/[^/?]+\/status(\?.*)?$)/,
+    baseUrl: import.meta.env.VITE_RESOURCES_API_BASE_URL ?? "http://localhost:8080/api",
+  },
   // Résidences (NestJS, Chambre/Demande/Contrat) : /chambres, /demandes, /contrats → RESIDENCES_API_BASE_URL
   {
     prefixes: ["/chambres", "/demandes", "/contrats"],
@@ -61,7 +69,9 @@ const SERVICE_ROUTES: ReadonlyArray<{ prefixes: string[]; baseUrl: string }> = [
 ];
 
 const baseUrlFor = (path: string): string => {
-  const route = SERVICE_ROUTES.find((r) => r.prefixes.some((p) => path === p || path.startsWith(`${p}/`) || path.startsWith(`${p}?`)));
+  const route = SERVICE_ROUTES.find(
+    (r) => r.pattern?.test(path) || r.prefixes.some((p) => path === p || path.startsWith(`${p}/`) || path.startsWith(`${p}?`)),
+  );
   return route?.baseUrl ?? API_BASE_URL;
 };
 
