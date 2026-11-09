@@ -23,6 +23,7 @@ from app.memory import ConversationStore, InMemoryStore, MongoStore
 from app.pending import PendingStore, get_pending
 from app.render import to_markdown, to_pdf
 from app.schemas import Action, AgentRequest, AgentResponse, ConfirmResult
+from app.tools.campus import CampusClient
 from app.tools.users import ToolError, UserServiceClient
 from app.tts import TTSUnavailableError, get_tts
 
@@ -129,7 +130,12 @@ def create_app() -> FastAPI:
         store = get_store()
         history = await store.load(principal.sub, cid)
         users = UserServiceClient(settings.user_service_url, principal.token)
-        deps = AgentDeps(principal=principal, users=users)
+        campus = CampusClient(
+            academic_url=settings.academic_service_url, resources_url=settings.resources_service_url,
+            residences_url=settings.residences_service_url, library_url=settings.library_service_url,
+            token=principal.token,
+        )
+        deps = AgentDeps(principal=principal, users=users, campus=campus)
         try:
             result = await get_agent().run(prompt, deps=deps, message_history=history)
         except ModelRateLimitError:  # quota du fournisseur (offre gratuite : ~15 requetes/minute/modele)
@@ -147,6 +153,7 @@ def create_app() -> FastAPI:
             raise HTTPException(502, "L'assistant est momentanement indisponible") from None
         finally:
             await users.aclose()
+            await campus.aclose()
         await store.append(principal.sub, cid, strip_media(result.new_messages()))
         log.info("agent_chat sub=%s role=%s tools=%s", principal.sub, principal.role, [a.tool for a in deps.actions])
 

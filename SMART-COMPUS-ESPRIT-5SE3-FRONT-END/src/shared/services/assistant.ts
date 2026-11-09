@@ -23,6 +23,8 @@ export interface AssistantReply {
   conversation_id: string;
   actions: AssistantAction[];
   sources: string[];
+  /** WAV encodé en base64, présent seulement si `wantAudio` a été demandé et que la voix du serveur (Piper) est active. */
+  audio_b64?: string | null;
 }
 
 export interface AssistantImage {
@@ -34,6 +36,8 @@ export interface AssistantRequest {
   message: string;
   conversationId?: string | null;
   image?: AssistantImage | null;
+  /** Demande la voix du serveur (Piper) : réponse 501 si elle n'est pas installée. */
+  wantAudio?: boolean;
 }
 
 export type AssistantErrorKind = "unavailable" | "busy" | "auth" | "network" | "rejected" | "unknown";
@@ -94,6 +98,7 @@ export function askAssistant(req: AssistantRequest, signal?: AbortSignal): Promi
       message: req.message,
       ...(req.conversationId ? { conversation_id: req.conversationId } : {}),
       ...(req.image ? { image_b64: req.image.base64, image_media_type: req.image.mediaType } : {}),
+      ...(req.wantAudio ? { want_audio: true } : {}),
     },
     signal,
   );

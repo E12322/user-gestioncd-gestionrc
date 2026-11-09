@@ -79,6 +79,7 @@ function AssistantChat() {
   const nextId = useRef(1);
   const abortRef = useRef<AbortController | null>(null);
   const recognitionRef = useRef<RecognitionLike | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fabRef = useRef<HTMLButtonElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -107,6 +108,7 @@ function AssistantChat() {
     () => () => {
       abortRef.current?.abort();
       recognitionRef.current?.stop();
+      audioRef.current?.pause();
       if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
     },
     [],
@@ -129,6 +131,13 @@ function AssistantChat() {
     window.speechSynthesis.speak(u);
   };
 
+  const playServerVoice = (audioB64: string) => {
+    audioRef.current?.pause();
+    const a = new Audio(`data:audio/wav;base64,${audioB64}`);
+    audioRef.current = a;
+    void a.play().catch(() => undefined);
+  };
+
   const send = async () => {
     const text = input.trim();
     if (!text || busy) return;
@@ -140,13 +149,28 @@ function AssistantChat() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     try {
-      const reply = await askAssistant(
-        { message: text, conversationId, image: attached ? { base64: attached.base64, mediaType: attached.mediaType } : null },
-        ctrl.signal,
-      );
+      const payload = {
+        message: text,
+        conversationId,
+        image: attached ? { base64: attached.base64, mediaType: attached.mediaType } : null,
+      };
+      let reply;
+      try {
+        reply = await askAssistant({ ...payload, wantAudio: speak }, ctrl.signal);
+      } catch (e) {
+        // Voix du serveur non installée (501) : on repose la question sans audio, et la voix du navigateur prend le relais.
+        if (speak && e instanceof AssistantError && e.kind === "unavailable") {
+          reply = await askAssistant(payload, ctrl.signal);
+        } else {
+          throw e;
+        }
+      }
       setConversationId(reply.conversation_id);
       push({ from: "bot", text: reply.answer, reply });
-      if (speak) readAloud(reply.answer);
+      if (speak) {
+        if (reply.audio_b64) playServerVoice(reply.audio_b64);
+        else readAloud(reply.answer);
+      }
     } catch (e) {
       if ((e as Error).name !== "AbortError") push({ from: "error", text: errorText(e) });
     } finally {
@@ -168,6 +192,7 @@ function AssistantChat() {
     const next = !speak;
     setSpeak(next);
     writeFlag(SPEAK_KEY, next);
+    if (!next) audioRef.current?.pause();
     if (!next && "speechSynthesis" in window) window.speechSynthesis.cancel();
   };
 

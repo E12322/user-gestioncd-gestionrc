@@ -17,6 +17,7 @@ from app.knowledge import KnowledgeBase, get_knowledge
 from app.pending import PendingStore, TooManyPendingError, get_pending
 from app.permissions import permissions_for
 from app.schemas import Action, AgentAnswer
+from app.tools.campus import CampusClient
 from app.tools.users import ToolError, UserServiceClient
 
 PROMPTS = Path(__file__).parent / "prompts"
@@ -27,6 +28,7 @@ PHONE_RE = re.compile(r"\+?[0-9 ]{8,20}")
 class AgentDeps:
     principal: Principal
     users: UserServiceClient
+    campus: CampusClient | None = None
     actions: list[Action] = field(default_factory=list)
     sources: list[str] = field(default_factory=list)
     pending: PendingStore = field(default_factory=get_pending)
@@ -54,6 +56,23 @@ def build_instructions(ctx: RunContext[AgentDeps]) -> str:
 async def _needs_users_manage(ctx: RunContext[AgentDeps], tool_def: ToolDefinition) -> ToolDefinition | None:
     """Cache l'outil au modele si l'utilisateur n'a pas la permission."""
     return tool_def if "users.manage" in ctx.deps.permissions else None
+
+
+def _needs(permission: str):
+    """Fabrique un filtre `prepare` : l'outil n'existe pas pour le modele sans cette permission."""
+
+    async def prepare(ctx: RunContext[AgentDeps], tool_def: ToolDefinition) -> ToolDefinition | None:
+        return tool_def if permission in ctx.deps.permissions else None
+
+    return prepare
+
+
+async def _campus(ctx: RunContext[AgentDeps], tool: str, args: dict[str, Any], call) -> Any:
+    """Appelle un module du campus (lecture) ; `call` recoit le client, absent si non configure."""
+    if ctx.deps.campus is None:
+        ctx.deps.actions.append(Action(tool=tool, args=args, status="error"))
+        return {"error": "Ce module n'est pas disponible."}
+    return await _call(ctx, tool, args, call(ctx.deps.campus))
 
 
 async def _call(ctx: RunContext[AgentDeps], tool: str, args: dict[str, Any], coro) -> Any:
@@ -109,6 +128,41 @@ def build_agent(model: str) -> Agent[AgentDeps, AgentAnswer]:
     async def get_user_profile(ctx: RunContext[AgentDeps], user_id: str) -> Any:
         """ADMIN : profil d'un compte par matricule (ex. ETU-2026-0001). Lecture seule."""
         return await _call(ctx, "get_user_profile", {"user_id": user_id}, ctx.deps.users.get_profile(user_id))
+
+    @agent.tool(prepare=_needs("academic.view"))
+    async def list_courses(ctx: RunContext[AgentDeps], query: str | None = None) -> Any:
+        """Cours du catalogue academique (code, intitule, departement, credits, semestre, enseignant, capacite).
+        `query` filtre par mot-cle (code, intitule, departement, enseignant). Lecture seule."""
+        args = {"query": query}
+        return await _campus(ctx, "list_courses", args, lambda c: c.list_courses(query))
+
+    @agent.tool(prepare=_needs("resources.book"))
+    async def list_rooms(
+        ctx: RunContext[AgentDeps], query: str | None = None, min_capacity: int | None = None
+    ) -> Any:
+        """Salles du campus (nom, batiment, etage, type, capacite, equipements). `query` filtre par nom, batiment
+        ou type ; `min_capacity` par capacite minimale. Lecture seule : tu ne reserves rien."""
+        args = {"query": query, "min_capacity": min_capacity}
+        return await _campus(ctx, "list_rooms", args, lambda c: c.list_rooms(query, min_capacity))
+
+    @agent.tool(prepare=_needs("housing.request"))
+    async def list_chambres(ctx: RunContext[AgentDeps]) -> Any:
+        """Chambres des residences universitaires. Lecture seule : tu ne fais aucune demande d'hebergement."""
+        return await _campus(ctx, "list_chambres", {}, lambda c: c.list_chambres())
+
+    @agent.tool(prepare=_needs("library.borrow"))
+    async def search_books(
+        ctx: RunContext[AgentDeps], query: str | None = None, available_only: bool = False
+    ) -> Any:
+        """Livres de la bibliotheque (titre, auteur, categorie, exemplaires, disponibles, file d'attente).
+        `query` filtre par titre, auteur, categorie ou ISBN. Lecture seule : tu n'empruntes rien."""
+        args = {"query": query, "available_only": available_only}
+        return await _campus(ctx, "search_books", args, lambda c: c.list_books(query, available_only))
+
+    @agent.tool(prepare=_needs("library.borrow"))
+    async def get_my_loans(ctx: RunContext[AgentDeps]) -> Any:
+        """Emprunts et reservations du compte connecte (echeances, retards). Toujours les siens."""
+        return await _campus(ctx, "get_my_loans", {}, lambda c: c.my_library())
 
     @agent.tool
     async def search_knowledge(ctx: RunContext[AgentDeps], query: str) -> Any:

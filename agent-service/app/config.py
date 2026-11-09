@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     environment: str = "development"
     agent_model: str = "anthropic:claude-sonnet-5-5"
     user_service_url: str = "http://localhost:4001"
+    academic_service_url: str = "http://localhost:8081"
+    resources_service_url: str = "http://localhost:8080"
+    residences_service_url: str = "http://localhost:3001"
+    library_service_url: str = "http://localhost:8082"
     jwt_issuer: str = "smartcampus-user-service"
     jwt_audience: str = "smartcampus"
     jwks_url: str | None = None
