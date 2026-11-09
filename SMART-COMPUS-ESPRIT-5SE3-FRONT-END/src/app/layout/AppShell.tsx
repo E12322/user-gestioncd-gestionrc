@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { TopBar } from "./TopBar";
 import { Sidebar } from "./Sidebar";
 import { MobileNav } from "./MobileNav";
+import { AssistantWidget } from "./AssistantWidget";
 import { useT } from "@/shared/i18n";
 
 const COLLAPSE_KEY = "smartcampus.sidebarCollapsed";
@@ -54,6 +55,7 @@ export function AppShell() {
         </main>
       </div>
       <MobileNav drawerOpen={drawerOpen} onDrawerChange={setDrawerOpen} />
+      <AssistantWidget />
     </div>
   );
 }

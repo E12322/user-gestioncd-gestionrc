@@ -16,6 +16,7 @@ SmartCampus centralise l'ensemble des activités administratives, pédagogiques 
 | **Module 4 : Résidences** | Chambres, demandes d'hébergement, contrats | NestJS (3 microservices + Gateway) | 3001 | PostgreSQL, RabbitMQ |
 | **Module 5 : Vie Étudiante** | Clubs, adhésions, événements, inscriptions | Spring Boot / JPA | 4005 | MongoDB / H2 |
 | **Module 6 : Bibliothèque** | Catalogue, prêts, règles de quotas, retards, réservations | Python / FastAPI / SQLAlchemy | 8082 | SQLite / PostgreSQL, Eureka, RabbitMQ |
+| **Agent IA** | Assistant de discussion (règlement, frais, calendrier, compte), outils lecture/écriture avec confirmation | Python / FastAPI / Pydantic AI (Gemini) | 4010 | JWT de l'utilisateur (RS256 JWKS / HS256 dev), RAG BM25, MongoDB optionnel |
 | **Frontend** | Interface web unifiée responsive multi-rôles | React / Vite / TypeScript | 5173 | Client HTTP unique, JWT, Tailwind |
 
 ---
@@ -30,6 +31,7 @@ Microservices/
 ├── backend-residences/                     # Module 4 : Résidences (NestJS Gateway :3001 & Services)
 ├── vie-etudiante/                          # Module 5 : Vie Étudiante (Spring Boot :4005)
 ├── gestion-bibliotheque/                   # Module 6 : Gestion Bibliothèque (Python FastAPI :8082)
+├── agent-service/                          # Agent IA : assistant SmartCampus (FastAPI :4010)
 ├── SMART-COMPUS-ESPRIT-5SE3-FRONT-END/     # Frontend React (Vite :5173)
 └── docs/                                   # Documentation et schémas d'architecture
 ```
@@ -105,6 +107,15 @@ pip install -r requirements.txt
 uvicorn app.main:app --port 8082 --reload
 ```
 Documentation Swagger du microservice bibliothèque accessible sur : `http://localhost:8082/docs`.
+
+#### Agent IA (Python, voir `agent-service/README.md`)
+```bash
+cd agent-service
+python -m venv .venv && .venv\Scripts\python -m pip install -e ".[dev]"   # première fois
+copy .env.example .env     # GOOGLE_API_KEY + JWT_SECRET identique à celui du module 1
+.venv\Scripts\python -m uvicorn app.main:app --port 4010
+```
+Le widget de l'assistant (bouton rond en bas à droite) apparaît dans le front dès que l'utilisateur est connecté. Il réutilise le cookie `httpOnly` du module 1 ; `VITE_AGENT_URL` (défaut `http://localhost:4010`) indique où le joindre. L'agent n'a aucun droit propre : chaque appel vers le module 1 porte le JWT de l'utilisateur.
 
 #### Frontend (React / Vite)
 ```bash

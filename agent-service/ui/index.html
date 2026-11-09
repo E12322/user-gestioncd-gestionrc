@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assistant SmartCampus (demo)</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1c2330; --muted:#5b6575; --accent:#1f6feb; --line:#d9dee6; --ok:#1a7f37; --warn:#9a6700; --bad:#cf222e; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f141b; --card:#18202b; --text:#e6edf3; --muted:#9aa7b6; --accent:#4c9aff; --line:#2b3644; --ok:#3fb950; --warn:#d29922; --bad:#f85149; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  main { max-width:760px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.25rem; margin:0 0 4px; }
+  .muted { color:var(--muted); font-size:.875rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; margin:12px 0; }
+  label { display:block; font-size:.875rem; color:var(--muted); margin:8px 0 4px; }
+  input, textarea, select, button { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  textarea, input[type=password] { width:100%; }
+  button { cursor:pointer; background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.secondary { background:transparent; color:var(--text); border-color:var(--line); }
+  button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; }
+  .msg { white-space:pre-wrap; border-left:3px solid var(--line); padding:4px 10px; margin:8px 0; }
+  .msg.user { border-color:var(--accent); } .msg.bot { border-color:var(--ok); } .msg.err { border-color:var(--bad); color:var(--bad); }
+  .meta { font-size:.8rem; color:var(--muted); }
+  .confirm { border:1px solid var(--warn); border-radius:8px; padding:8px; margin:6px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Assistant SmartCampus</h1>
+  <p class="muted">Page de démonstration (développement uniquement). Micro et lecture vocale sont ceux du navigateur : gratuits.</p>
+
+  <div class="card">
+    <label for="token">Jeton JWT (obtenu en vous connectant au user-service)</label>
+    <input id="token" type="password" autocomplete="off" placeholder="eyJ...">
+    <p class="muted">Gardé uniquement dans cet onglet (sessionStorage), jamais envoyé ailleurs que vers ce serveur.</p>
+  </div>
+
+  <div id="log" class="card" aria-live="polite"></div>
+
+  <div class="card">
+    <label for="msg">Votre message</label>
+    <textarea id="msg" rows="3" maxlength="4000"></textarea>
+    <div class="row">
+      <button id="send">Envoyer</button>
+      <button id="mic" class="secondary" type="button">🎤 Dicter</button>
+      <label class="row" style="margin:0"><input id="speak" type="checkbox"> Lire la réponse</label>
+      <select id="fmt" aria-label="Format de sortie"><option value="json">JSON</option><option value="markdown">Markdown</option><option value="pdf">PDF</option></select>
+      <input id="img" type="file" accept="image/jpeg,image/png,image/webp" aria-label="Image">
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let conversationId = null;
+try { $("token").value = sessionStorage.getItem("jwt") || ""; } catch {}
+
+// Tout ce qui vient du serveur est affiche avec textContent (jamais innerHTML) : pas d'injection HTML.
+function add(kind, text, meta) {
+  const d = document.createElement("div"); d.className = "msg " + kind; d.textContent = text;
+  if (meta) { const m = document.createElement("div"); m.className = "meta"; m.textContent = meta; d.appendChild(m); }
+  $("log").appendChild(d); d.scrollIntoView({ block: "nearest" }); return d;
+}
+function authHeaders() {
+  const t = $("token").value.trim(); try { sessionStorage.setItem("jwt", t); } catch {}
+  return { "Authorization": "Bearer " + t, "Content-Type": "application/json" };
+}
+const fileToB64 = (f) => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result.split(",")[1]); r.onerror = ko; r.readAsDataURL(f); });
+function download(name, mime, b64orText, isB64) {
+  const bytes = isB64 ? Uint8Array.from(atob(b64orText), c => c.charCodeAt(0)) : new TextEncoder().encode(b64orText);
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([bytes], { type: mime })); a.download = name; a.click();
+}
+
+function showConfirmations(actions) {
+  for (const a of actions.filter(x => x.status === "needs_confirmation")) {
+    const box = document.createElement("div"); box.className = "confirm";
+    const t = document.createElement("div"); t.textContent = "Confirmer : " + a.summary; box.appendChild(t);
+    const ok = document.createElement("button"); ok.textContent = "Confirmer";
+    const no = document.createElement("button"); no.textContent = "Annuler"; no.className = "secondary";
+    const act = async (verb) => {
+      ok.disabled = no.disabled = true;
+      const r = await fetch(`/agent/actions/${encodeURIComponent(a.confirmation_id)}/${verb}`, { method: "POST", headers: authHeaders() });
+      const body = r.status === 204 ? null : await r.json().catch(() => null);
+      t.textContent = verb === "cancel" ? "Annulé." : r.ok ? "Résultat : " + body.action.status : "Action introuvable ou expirée.";
+      box.querySelectorAll("button").forEach(b => b.remove());
+    };
+    ok.onclick = () => act("confirm"); no.onclick = () => act("cancel");
+    const row = document.createElement("div"); row.className = "row"; row.append(ok, no); box.appendChild(row);
+    $("log").appendChild(box);
+  }
+}
+
+$("send").onclick = async () => {
+  const message = $("msg").value.trim(); if (!message) return;
+  add("user", message); $("msg").value = ""; $("send").disabled = true;
+  const body = { message, conversation_id: conversationId, output_format: $("fmt").value };
+  const f = $("img").files[0];
+  if (f) { body.image_b64 = await fileToB64(f); body.image_media_type = f.type; $("img").value = ""; }
+  try {
+    const r = await fetch("/agent/chat", { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) { add("err", data.detail || ("Erreur " + r.status)); return; }
+    conversationId = data.conversation_id;
+    add("bot", data.answer, `confiance : ${data.confidence}` + (data.sources.length ? " · sources : " + data.sources.join(", ") : ""));
+    showConfirmations(data.actions);
+    if (data.markdown) download("reponse.md", "text/markdown", data.markdown, false);
+    if (data.pdf_b64) download("reponse.pdf", "application/pdf", data.pdf_b64, true);
+    if ($("speak").checked) {
+      if (data.audio_b64) new Audio("data:audio/wav;base64," + data.audio_b64).play();
+      else if ("speechSynthesis" in window) { const u = new SpeechSynthesisUtterance(data.answer); u.lang = "fr-FR"; speechSynthesis.speak(u); }
+    }
+  } catch { add("err", "Serveur injoignable."); }
+  finally { $("send").disabled = false; }
+};
+$("msg").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("send").click(); });
+
+// Dictee : reconnaissance vocale du navigateur (Chrome/Edge), gratuite, sans serveur.
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SR) { $("mic").disabled = true; $("mic").title = "Non supporte par ce navigateur"; }
+else $("mic").onclick = () => {
+  const rec = new SR(); rec.lang = "fr-FR"; rec.interimResults = false;
+  rec.onresult = (e) => { $("msg").value += (e.results[0][0].transcript + " "); };
+  rec.onend = () => { $("mic").textContent = "🎤 Dicter"; };
+  $("mic").textContent = "… j'écoute"; rec.start();
+};
+</script>
+</body>
+</html>
