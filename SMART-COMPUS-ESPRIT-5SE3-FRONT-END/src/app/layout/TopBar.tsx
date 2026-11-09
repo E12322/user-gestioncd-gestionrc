@@ -11,10 +11,8 @@ import {
   DropdownMenuTrigger,
 } from "@/shared/components/ui/dropdown-menu";
 import { Logo } from "@/shared/components/Logo";
-import { DemoPanel } from "./DemoPanel";
 import { useAuth } from "@/shared/auth/AuthContext";
 import { ROLE_LABEL } from "@/shared/auth/roles";
-import { USE_MOCKS } from "@/shared/api/client";
 import { useT } from "@/shared/i18n";
 
 const UNREAD_NOTIFICATIONS = 3;
@@ -56,7 +54,6 @@ export function TopBar() {
         </form>
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2 md:ml-0">
-          {USE_MOCKS && <DemoPanel />}
 
           <Button
             variant="ghost"
