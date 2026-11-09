@@ -1,5 +1,6 @@
 package com.smartcampus.ressources.controller;
 
+import com.smartcampus.ressources.security.CurrentUserArgumentResolver.*;
 import com.smartcampus.ressources.dto.SalleRequestDTO;
 import com.smartcampus.ressources.dto.SalleResponseDTO;
 import com.smartcampus.ressources.service.ISalleService;
@@ -25,7 +26,7 @@ public class SalleController {
     // BF3.1 : L'administrateur peut créer une salle
     @PostMapping
     public ResponseEntity<SalleResponseDTO> creerSalle(@Valid @RequestBody SalleRequestDTO dto,
-                                                      @RequestHeader(value = "X-User-Id", defaultValue = "5") Long adminId) {
+                                                      @CurrentUserId Long adminId) {
         SalleResponseDTO response = salleService.creerSalle(dto, adminId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -34,14 +35,14 @@ public class SalleController {
     @PutMapping("/{id}")
     public ResponseEntity<SalleResponseDTO> modifierSalle(@PathVariable Long id,
                                                          @Valid @RequestBody SalleRequestDTO dto,
-                                                         @RequestHeader(value = "X-User-Id", defaultValue = "5") Long adminId) {
+                                                         @CurrentUserId Long adminId) {
         return ResponseEntity.ok(salleService.modifierSalle(id, dto, adminId));
     }
 
     // BF3.2 : L'administrateur peut supprimer une salle
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> supprimerSalle(@PathVariable Long id,
-                                              @RequestHeader(value = "X-User-Id", defaultValue = "5") Long adminId) {
+                                              @CurrentUserId Long adminId) {
         salleService.supprimerSalle(id, adminId);
         return ResponseEntity.noContent().build();
     }

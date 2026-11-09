@@ -97,7 +97,7 @@ export const getAvailability = (roomId: string, date: string, viewer: Viewer, si
 
 /** GET /reservations?scope= — « mine » : les miennes · « all » : toutes (administrateur). */
 export const listReservations = (scope: "mine" | "all", viewer: Viewer, signal?: AbortSignal) =>
-  api.get<Reservation[]>("/reservations", {
+  api.get<Reservation[]>(`/reservations?scope=${scope}`, {
     signal,
     mock: () => {
       svc(viewer);

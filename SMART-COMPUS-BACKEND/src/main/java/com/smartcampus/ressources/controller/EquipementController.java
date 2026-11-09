@@ -1,5 +1,6 @@
 package com.smartcampus.ressources.controller;
 
+import com.smartcampus.ressources.security.CurrentUserArgumentResolver.*;
 import com.smartcampus.ressources.dto.*;
 import com.smartcampus.ressources.service.IEquipementService;
 import jakarta.validation.Valid;
@@ -22,7 +23,7 @@ public class EquipementController {
     // BF3.10 : L'administrateur peut enregistrer un équipement
     @PostMapping
     public ResponseEntity<EquipementResponseDTO> creerEquipement(@Valid @RequestBody EquipementRequestDTO dto,
-                                                                 @RequestHeader(value = "X-User-Id", defaultValue = "5") Long adminId) {
+                                                                 @CurrentUserId Long adminId) {
         EquipementResponseDTO response = equipementService.creerEquipement(dto, adminId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -31,14 +32,14 @@ public class EquipementController {
     @PutMapping("/{id}")
     public ResponseEntity<EquipementResponseDTO> modifierEquipement(@PathVariable Long id,
                                                                     @Valid @RequestBody EquipementRequestDTO dto,
-                                                                    @RequestHeader(value = "X-User-Id", defaultValue = "5") Long adminId) {
+                                                                    @CurrentUserId Long adminId) {
         return ResponseEntity.ok(equipementService.modifierEquipement(id, dto, adminId));
     }
 
     // BF3.10 : L'administrateur peut supprimer un équipement
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> supprimerEquipement(@PathVariable Long id,
-                                                    @RequestHeader(value = "X-User-Id", defaultValue = "5") Long adminId) {
+                                                    @CurrentUserId Long adminId) {
         equipementService.supprimerEquipement(id, adminId);
         return ResponseEntity.noContent().build();
     }
@@ -47,7 +48,7 @@ public class EquipementController {
     @PutMapping("/{id}/affecter")
     public ResponseEntity<EquipementResponseDTO> affecterEquipement(@PathVariable Long id,
                                                                     @RequestBody AffectationEquipementDTO dto,
-                                                                    @RequestHeader(value = "X-User-Id", defaultValue = "5") Long adminId) {
+                                                                    @CurrentUserId Long adminId) {
         return ResponseEntity.ok(equipementService.affecterEquipement(id, dto, adminId));
     }
 

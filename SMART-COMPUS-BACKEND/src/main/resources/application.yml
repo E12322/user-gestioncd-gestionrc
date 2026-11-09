@@ -1,6 +1,14 @@
 server:
   port: ${PORT:8080}
 
+app:
+  jwt:
+    # Doit etre identique a JWT_SECRET du user-service. Obligatoire en production (profil prod : demarrage refuse sinon).
+    secret: ${JWT_SECRET:change-me-en-production-32-caracteres-minimum}
+    issuer: ${JWT_ISSUER:smartcampus-user-service}
+    audience: ${JWT_AUDIENCE:smartcampus}
+    cors-origins: ${CORS_ORIGINS:http://localhost:5173}
+
 spring:
   application:
     name: smartcampus-gestion-ressources

@@ -1,10 +1,13 @@
 package com.smartcampus.ressources.controller;
 
+import com.smartcampus.ressources.security.CurrentUserArgumentResolver.*;
 import com.smartcampus.ressources.dto.frontend.FrontendResourceDTOs.*;
 import com.smartcampus.ressources.entity.Equipement;
 import com.smartcampus.ressources.entity.Reservation;
 import com.smartcampus.ressources.entity.Salle;
 import com.smartcampus.ressources.enums.StatutReservation;
+import com.smartcampus.ressources.exception.AccesNonAutoriseException;
+import com.smartcampus.ressources.security.CurrentUser;
 import com.smartcampus.ressources.exception.CapaciteDepasseeException;
 import com.smartcampus.ressources.exception.ConflitReservationException;
 import com.smartcampus.ressources.exception.RessourceNotFoundException;
@@ -134,10 +137,14 @@ public class FrontendResourceController {
     @GetMapping("/reservations")
     public ResponseEntity<List<FrontendReservationDTO>> listReservations(
             @RequestParam(defaultValue = "mine") String scope,
-            @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId) {
+            @CurrentUserId Long userId) {
 
         List<Reservation> list;
         if ("all".equalsIgnoreCase(scope)) {
+            // Toutes les réservations : administrateur uniquement (le rôle vient du JWT).
+            if (!CurrentUser.require().isAdmin()) {
+                throw new AccesNonAutoriseException("Réservé à l'administrateur");
+            }
             list = reservationRepository.findAll();
         } else {
             list = reservationRepository.findByDemandeurId(userId);
@@ -157,9 +164,9 @@ public class FrontendResourceController {
     @PostMapping("/reservations")
     public ResponseEntity<FrontendReservationDTO> createReservation(
             @RequestBody ReservationInputDTO input,
-            @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId,
-            @RequestHeader(value = "X-User-Name", defaultValue = "Karim Trabelsi") String userName,
-            @RequestHeader(value = "X-User-Role", defaultValue = "teacher") String userRole) {
+            @CurrentUserId Long userId,
+            @CurrentUserName String userName,
+            @CurrentUserRole String userRole) {
 
         Long salleId = Long.parseLong(input.roomId());
         Salle salle = salleRepository.findById(salleId)
@@ -225,7 +232,7 @@ public class FrontendResourceController {
     public ResponseEntity<FrontendReservationDTO> decideReservation(
             @PathVariable Long id,
             @RequestBody StatusUpdateDTO body,
-            @RequestHeader(value = "X-User-Id", defaultValue = "5") Long adminId) {
+            @CurrentUserId Long adminId) {
 
         Reservation r = reservationRepository.findById(id)
                 .orElseThrow(() -> new RessourceNotFoundException("Réservation introuvable : " + id));
@@ -255,6 +262,11 @@ public class FrontendResourceController {
     public ResponseEntity<Void> cancelReservation(@PathVariable Long id) {
         Reservation r = reservationRepository.findById(id)
                 .orElseThrow(() -> new RessourceNotFoundException("Réservation introuvable : " + id));
+        // Annuler : le demandeur lui-même ou un administrateur.
+        CurrentUser.Principal moi = CurrentUser.require();
+        if (!moi.isAdmin() && !moi.numericId().equals(r.getDemandeurId())) {
+            throw new AccesNonAutoriseException("Vous ne pouvez annuler que vos propres réservations");
+        }
         r.annulerReservation();
         reservationRepository.save(r);
         return ResponseEntity.noContent().build();

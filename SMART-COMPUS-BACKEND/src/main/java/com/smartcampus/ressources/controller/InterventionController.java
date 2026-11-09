@@ -1,5 +1,6 @@
 package com.smartcampus.ressources.controller;
 
+import com.smartcampus.ressources.security.CurrentUserArgumentResolver.*;
 import com.smartcampus.ressources.dto.ClotureInterventionDTO;
 import com.smartcampus.ressources.dto.InterventionRequestDTO;
 import com.smartcampus.ressources.dto.InterventionResponseDTO;
@@ -25,7 +26,7 @@ public class InterventionController {
     // BF3.16 : Planifier une intervention (corrective ou préventive)
     @PostMapping("/planifier")
     public ResponseEntity<InterventionResponseDTO> planifierIntervention(@Valid @RequestBody InterventionRequestDTO dto,
-                                                                         @RequestHeader(value = "X-User-Id", defaultValue = "3") Long planificateurId) {
+                                                                         @CurrentUserId Long planificateurId) {
         InterventionResponseDTO response = interventionService.planifierIntervention(dto, planificateurId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -54,7 +55,7 @@ public class InterventionController {
     // BF3.14 : Le technicien peut traiter les demandes de maintenance
     @PutMapping("/{id}/traiter")
     public ResponseEntity<InterventionResponseDTO> demarrerTraitement(@PathVariable Long id,
-                                                                      @RequestHeader(value = "X-User-Id", defaultValue = "4") Long technicienId) {
+                                                                      @CurrentUserId Long technicienId) {
         return ResponseEntity.ok(interventionService.demarrerTraitement(id, technicienId));
     }
 

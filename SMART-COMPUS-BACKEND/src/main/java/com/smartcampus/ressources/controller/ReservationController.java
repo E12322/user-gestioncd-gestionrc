@@ -1,5 +1,6 @@
 package com.smartcampus.ressources.controller;
 
+import com.smartcampus.ressources.security.CurrentUserArgumentResolver.*;
 import com.smartcampus.ressources.dto.RefusReservationDTO;
 import com.smartcampus.ressources.dto.ReservationRequestDTO;
 import com.smartcampus.ressources.dto.ReservationResponseDTO;
@@ -32,14 +33,14 @@ public class ReservationController {
     @PutMapping("/{id}")
     public ResponseEntity<ReservationResponseDTO> modifierReservation(@PathVariable Long id,
                                                                      @Valid @RequestBody ReservationRequestDTO dto,
-                                                                     @RequestHeader(value = "X-User-Id") Long demandeurId) {
+                                                                     @CurrentUserId Long demandeurId) {
         return ResponseEntity.ok(reservationService.modifierReservation(id, dto, demandeurId));
     }
 
     // BF3.7 : L'enseignant peut annuler la réservation d'une salle
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> annulerReservation(@PathVariable Long id,
-                                                   @RequestHeader(value = "X-User-Id") Long demandeurId) {
+                                                   @CurrentUserId Long demandeurId) {
         reservationService.annulerReservation(id, demandeurId);
         return ResponseEntity.noContent().build();
     }
@@ -47,7 +48,7 @@ public class ReservationController {
     // BF3.8 : Le responsable peut valider une demande de réservation
     @PutMapping("/{id}/valider")
     public ResponseEntity<ReservationResponseDTO> validerReservation(@PathVariable Long id,
-                                                                     @RequestHeader(value = "X-User-Id", defaultValue = "3") Long responsableId) {
+                                                                     @CurrentUserId Long responsableId) {
         return ResponseEntity.ok(reservationService.validerReservation(id, responsableId));
     }
 
@@ -69,7 +70,7 @@ public class ReservationController {
     }
 
     @GetMapping("/mes-reservations")
-    public ResponseEntity<List<ReservationResponseDTO>> getMesReservations(@RequestHeader(value = "X-User-Id") Long userId) {
+    public ResponseEntity<List<ReservationResponseDTO>> getMesReservations(@CurrentUserId Long userId) {
         return ResponseEntity.ok(reservationService.getReservationsUtilisateur(userId));
     }
 }
