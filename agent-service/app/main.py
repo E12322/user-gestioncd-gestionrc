@@ -133,7 +133,7 @@ def create_app() -> FastAPI:
         campus = CampusClient(
             academic_url=settings.academic_service_url, resources_url=settings.resources_service_url,
             residences_url=settings.residences_service_url, library_url=settings.library_service_url,
-            token=principal.token,
+            student_life_url=settings.student_life_service_url, token=principal.token,
         )
         deps = AgentDeps(principal=principal, users=users, campus=campus)
         try:

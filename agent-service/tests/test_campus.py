@@ -26,6 +26,14 @@ BOOKS = [{"id": "b1", "title": "Clean Architecture", "author": "Martin", "catego
           "available": 0, "waiting": 2, "myLoanId": "l-9", "isbn": "x"}]
 LOANS = {"loans": [{"id": "l-1", "bookTitle": "T", "bookAuthor": "A", "dueDate": "2026-11-10", "status": "active",
                     "borrowerId": "ETU-1", "borrowerName": "Autre"}], "reservations": [], "limit": 3}
+CLUBS = [
+    {"id": "k1", "name": "Club Robotique", "category": "Technologie", "description": "Robots", "meetingPlace": "B",
+     "members": 48, "maxMembers": 60, "secretField": "x"},
+    {"id": "k2", "name": "Club Theatre", "category": "Arts", "description": "Scene", "meetingPlace": "A",
+     "members": 10, "maxMembers": 30},
+]
+EVENTS = [{"id": "ev-1", "title": "Journee des clubs", "description": "d", "date": "2026-11-11", "start": "10:00",
+           "end": "16:00", "location": "Esplanade", "clubName": None, "internal": "x"}]
 seen_auth: list[str] = []
 
 
@@ -45,6 +53,14 @@ def _client(status: int = 200) -> CampusClient:
             return httpx.Response(200, json=BOOKS)
         if path == "/loans/me":
             return httpx.Response(200, json=LOANS)
+        if path == "/clubs":
+            return httpx.Response(200, json=CLUBS)
+        if path == "/events":
+            return httpx.Response(200, json=EVENTS)
+        if path == "/memberships/mine":
+            return httpx.Response(200, json=[{"id": "m1", "clubId": "k1", "status": "PENDING"}])
+        if path == "/events/my-registrations":
+            return httpx.Response(200, json=[])
         return httpx.Response(404, json={})
 
     return CampusClient(
@@ -77,6 +93,15 @@ def test_books_hide_personal_fields_and_loans_keep_only_mine_fields():
     assert "borrowerName" not in loans and loans["bookTitle"] == "T"
 
 
+def test_clubs_and_events_are_filtered_and_trimmed():
+    clubs = run(_client().list_clubs("robot"))
+    assert clubs["total"] == 1 and "secretField" not in clubs["items"][0]
+    events = run(_client().list_events())
+    assert events["items"][0]["title"] == "Journee des clubs" and "internal" not in events["items"][0]
+    mine = run(_client().my_student_life())
+    assert mine["memberships"]["total"] == 1 and mine["event_registrations"]["total"] == 0
+
+
 def test_calls_carry_the_user_token():
     seen_auth.clear()
     run(_client().list_chambres())
@@ -95,6 +120,7 @@ def test_service_errors_are_readable():
 
 # --- Visibilite des outils selon la permission du role (le modele ne voit pas ce qu'il ne peut pas utiliser) ---
 seen: dict = {"tools": None}
+CLUB_TOOLS = {"list_clubs", "list_events", "get_my_club_activity"}
 
 
 def _model():
@@ -109,12 +135,12 @@ def test_campus_tools_visible_per_role(monkeypatch):
     monkeypatch.setattr(main, "_store", InMemoryStore())
     client = TestClient(main.app)
     for role, expected in (
-        ("student", {"list_courses", "list_rooms", "list_chambres", "search_books", "get_my_loans"}),
-        ("teacher", {"list_courses", "list_rooms", "search_books", "get_my_loans"}),
+        ("student", {"list_courses", "list_rooms", "list_chambres", "search_books", "get_my_loans", *CLUB_TOOLS}),
+        ("teacher", {"list_courses", "list_rooms", "search_books", "get_my_loans", *CLUB_TOOLS}),
     ):
         h = {"Authorization": f"Bearer {make_token(role=role)}"}
         with main.get_agent().override(model=_model()):
             assert client.post("/agent/chat", json={"message": "bonjour"}, headers=h).status_code == 200
         campus = {t for t in seen["tools"] if t in {"list_courses", "list_rooms", "list_chambres", "search_books",
-                                                    "get_my_loans"}}
+                                                    "get_my_loans", *CLUB_TOOLS}}
         assert campus == expected, role

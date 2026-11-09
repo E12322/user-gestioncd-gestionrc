@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     resources_service_url: str = "http://localhost:8080"
     residences_service_url: str = "http://localhost:3001"
     library_service_url: str = "http://localhost:8082"
+    student_life_service_url: str = "http://localhost:4005"
     jwt_issuer: str = "smartcampus-user-service"
     jwt_audience: str = "smartcampus"
     jwks_url: str | None = None

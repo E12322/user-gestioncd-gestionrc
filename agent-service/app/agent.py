@@ -164,6 +164,25 @@ def build_agent(model: str) -> Agent[AgentDeps, AgentAnswer]:
         """Emprunts et reservations du compte connecte (echeances, retards). Toujours les siens."""
         return await _campus(ctx, "get_my_loans", {}, lambda c: c.my_library())
 
+    @agent.tool(prepare=_needs("clubs.join"))
+    async def list_clubs(ctx: RunContext[AgentDeps], query: str | None = None) -> Any:
+        """Clubs etudiants (nom, categorie, description, lieu de reunion, membres, places, mon adhesion).
+        `query` filtre par nom, categorie ou description. Lecture seule : tu ne fais aucune demande d'adhesion."""
+        args = {"query": query}
+        return await _campus(ctx, "list_clubs", args, lambda c: c.list_clubs(query))
+
+    @agent.tool(prepare=_needs("clubs.join"))
+    async def list_events(ctx: RunContext[AgentDeps], query: str | None = None) -> Any:
+        """Evenements du campus (titre, date, horaires, lieu, club organisateur). `query` filtre par mot-cle.
+        Lecture seule : tu n'inscris personne."""
+        args = {"query": query}
+        return await _campus(ctx, "list_events", args, lambda c: c.list_events(query))
+
+    @agent.tool(prepare=_needs("clubs.join"))
+    async def get_my_club_activity(ctx: RunContext[AgentDeps]) -> Any:
+        """Adhesions aux clubs et inscriptions aux evenements du compte connecte. Toujours les siennes."""
+        return await _campus(ctx, "get_my_club_activity", {}, lambda c: c.my_student_life())
+
     @agent.tool
     async def search_knowledge(ctx: RunContext[AgentDeps], query: str) -> Any:
         """Cherche dans le reglement et les guides (uniquement ceux visibles pour le role de l'utilisateur).

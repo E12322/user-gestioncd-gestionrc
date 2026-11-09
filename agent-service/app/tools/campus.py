@@ -27,11 +27,12 @@ def _match(item: dict[str, Any], fields: tuple[str, ...], query: str | None) -> 
 class CampusClient:
     def __init__(
         self, *, academic_url: str, resources_url: str, residences_url: str, library_url: str, token: str,
-        transport: httpx.AsyncBaseTransport | None = None,
+        student_life_url: str = "http://localhost:4005", transport: httpx.AsyncBaseTransport | None = None,
     ):
         self._urls = {
             "academic": academic_url.rstrip("/"), "resources": resources_url.rstrip("/"),
             "residences": residences_url.rstrip("/"), "library": library_url.rstrip("/"),
+            "student-life": student_life_url.rstrip("/"),
         }
         self._http = httpx.AsyncClient(
             headers={"Authorization": f"Bearer {token}"}, timeout=httpx.Timeout(8.0), transport=transport
@@ -101,6 +102,30 @@ class CampusClient:
         ]
         reservations = data.get("reservations", [])
         return {"loans": loans[:MAX_ITEMS], "reservations": reservations[:MAX_ITEMS], "limit": data.get("limit")}
+
+    async def list_clubs(self, query: str | None = None) -> dict[str, Any]:
+        data = await self._get("student-life", "/clubs")
+        fields = ("name", "category", "description", "meetingPlace")
+        rows = [
+            _pick(c, ("id", "name", "category", "description", "meetingPlace", "members", "maxMembers", "myMembership"))
+            for c in data if _match(c, fields, query)
+        ]
+        return self._cap(rows)
+
+    async def list_events(self, query: str | None = None) -> dict[str, Any]:
+        data = await self._get("student-life", "/events")
+        fields = ("title", "description", "location", "clubName")
+        rows = [
+            _pick(e, ("id", "title", "description", "date", "start", "end", "location", "clubName"))
+            for e in data if _match(e, fields, query)
+        ]
+        return self._cap(rows)
+
+    async def my_student_life(self) -> dict[str, Any]:
+        """Adhesions et inscriptions aux evenements du compte connecte (les services filtrent deja par utilisateur)."""
+        memberships = await self._get("student-life", "/memberships/mine")
+        registrations = await self._get("student-life", "/events/my-registrations")
+        return {"memberships": self._cap(memberships), "event_registrations": self._cap(registrations)}
 
     async def aclose(self) -> None:
         await self._http.aclose()
