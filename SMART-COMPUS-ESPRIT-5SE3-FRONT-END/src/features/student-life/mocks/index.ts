@@ -227,6 +227,7 @@ export const db = {
   clubs,
   memberships: seedMemberships(),
   events: seedEvents(),
+  eventRegistrations: [] as { id: string; eventId: string; eventTitle: string; studentId: string; studentName: string; registeredAt: string }[],
   seq: 100,
   now: () => new Date().toISOString(),
 };

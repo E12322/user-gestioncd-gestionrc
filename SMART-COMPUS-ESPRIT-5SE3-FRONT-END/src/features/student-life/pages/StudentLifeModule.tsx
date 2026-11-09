@@ -10,10 +10,15 @@ import ClubAdminPage from "./ClubAdminPage";
 import ClubDetailPage from "./ClubDetailPage";
 import ClubsPage from "./ClubsPage";
 import EventsPage from "./EventsPage";
+import MyMembershipsPage from "./MyMembershipsPage";
+import MyEventsPage from "./MyEventsPage";
+import ClubReportPage from "./ClubReportPage";
 
 const TABS: { to: string; key: string; end?: boolean; roles: readonly Role[] }[] = [
   { to: "/vie-etudiante", key: "life.tab.clubs", end: true, roles: ["student", "teacher", "admin"] },
   { to: "/vie-etudiante/agenda", key: "life.tab.events", roles: ["student", "teacher", "admin"] },
+  { to: "/vie-etudiante/mes-adhesions", key: "life.tab.myMemberships", roles: ["student", "teacher"] },
+  { to: "/vie-etudiante/mes-evenements", key: "life.tab.myEvents", roles: ["student", "teacher"] },
   { to: "/vie-etudiante/gestion", key: "life.tab.admin", roles: ["admin"] },
 ];
 
@@ -23,7 +28,7 @@ const tab = ({ isActive }: { isActive: boolean }) =>
     isActive ? "border-navy text-navy" : "border-transparent text-slate-600 hover:text-foreground",
   );
 
-/** Module Vie étudiante & clubs : annuaire, agenda, gestion (administrateur). */
+/** Module Vie étudiante & clubs : annuaire, agenda, mes adhésions/événements, gestion (administrateur). */
 export default function StudentLifeModule() {
   const t = useT();
   const { role } = useAuth();
@@ -43,7 +48,10 @@ export default function StudentLifeModule() {
           <Route index element={<ClubsPage />} />
           <Route path="clubs/:id" element={<ClubDetailPage />} />
           <Route path="agenda" element={<EventsPage />} />
+          <Route path="mes-adhesions" element={allowed(["student", "teacher"]) ? <MyMembershipsPage /> : <ForbiddenView />} />
+          <Route path="mes-evenements" element={allowed(["student", "teacher"]) ? <MyEventsPage /> : <ForbiddenView />} />
           <Route path="gestion" element={allowed(["admin"]) ? <ClubAdminPage /> : <ForbiddenView />} />
+          <Route path="gestion/rapport/:clubId" element={allowed(["admin"]) ? <ClubReportPage /> : <ForbiddenView />} />
           <Route path="*" element={<NotFoundView />} />
         </Routes>
       </Suspense>

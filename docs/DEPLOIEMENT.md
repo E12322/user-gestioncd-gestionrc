@@ -60,6 +60,17 @@ d'application Gmail). Vérifier à l'inscription que chaque offre ne demande pas
    | `VITE_EMAIL_DOMAIN` | `gmail.com` |
    | `VITE_REAL_API_PREFIXES` | `/auth,/users,/roles,/login-history` |
 
+   **Une fois le service `smartcampus-vie` en ligne** (Render, voir `render.yaml`), ajouter aussi :
+
+   | Variable | Valeur |
+   |---|---|
+   | `VITE_STUDENT_LIFE_API_BASE_URL` | `/svc/vie` |
+   | `VITE_REAL_API_PREFIXES` | `/auth,/users,/roles,/login-history,/clubs,/events,/memberships,/reports` |
+
+   Variables Render de `smartcampus-vie` : `MONGODB_URI` (même cluster, base `smartcampus_student_life`), `JWKS_URI`
+   (`https://smartcampus-user.onrender.com/.well-known/jwks.json`), `CORS_ORIGIN` (l'adresse Vercel). Pour l'assistant,
+   ajouter `STUDENT_LIFE_SERVICE_URL` (`https://smartcampus-vie.onrender.com`) dans `smartcampus-agent`.
+
 4. Si les adresses Render diffèrent de `smartcampus-user.onrender.com` / `smartcampus-agent.onrender.com`, corriger les
    `destination` dans `SMART-COMPUS-ESPRIT-5SE3-FRONT-END/vercel.json`, puis pousser.
 5. Déployer et noter l'adresse du projet (`https://xxx.vercel.app`).

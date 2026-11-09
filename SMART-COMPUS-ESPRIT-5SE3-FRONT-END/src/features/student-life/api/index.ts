@@ -1,4 +1,4 @@
-import { api } from "@/shared/api/client";
+import { api, onRequest } from "@/shared/api/client";
 import { ApiError } from "@/shared/api/errors";
 import type { Role } from "@/shared/auth/roles";
 import { normalize } from "@/shared/lib/format";
@@ -12,17 +12,47 @@ import type {
   ClubDetail,
   ClubFilters,
   ClubInput,
+  ClubReport,
   ClubView,
   EventFilters,
   EventInput,
+  EventRegistration,
+  MemberDetail,
   Membership,
   MembershipStatus,
 } from "../types";
 
 /**
- * Stubs du club-service (via l'API Gateway). En production l'identité vient du JWT ;
- * en mock elle est passée explicitement (`Viewer`).
- * Erreurs : 403 interdit · 404 introuvable · 409 doublon / club complet · 422 saisie invalide.
+ * URL de base du microservice vie-etudiante / club-service (port 4005 par défaut).
+ */
+const STUDENT_LIFE_API_BASE_URL = import.meta.env.VITE_STUDENT_LIFE_API_BASE_URL ?? "http://localhost:4005";
+
+// Intercepteur pour router les requêtes du module student-life vers son microservice (port 4005)
+onRequest((config) => {
+  const routes = ["/clubs", "/memberships", "/events"];
+  for (const route of routes) {
+    if (config.url.includes(route)) {
+      const idx = config.url.indexOf(route);
+      const endpoint = config.url.substring(idx);
+      config.url = `${STUDENT_LIFE_API_BASE_URL}${endpoint}`;
+      break;
+    }
+  }
+  return config;
+});
+
+const toQuery = (params: Record<string, string | undefined>): string => {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v && v.trim()) q.set(k, v.trim());
+  }
+  const s = q.toString();
+  return s ? `?${s}` : "";
+};
+
+/**
+ * En production ou mode réel, l'identité et le rôle sont lus directement depuis le JWT
+ * (cookie sc_access ou Bearer). En mode mock, ils sont passés explicitement (Viewer).
  */
 export interface Viewer {
   id: string;
@@ -55,8 +85,9 @@ const fullError = (c: Club) =>
 // ---------- Clubs ----------
 
 /** GET /clubs?q=&category= */
-export const listClubs = (filters: ClubFilters, viewer: Viewer, signal?: AbortSignal) =>
-  api.get<ClubView[]>("/clubs", {
+export const listClubs = (filters: ClubFilters, viewer: Viewer, signal?: AbortSignal) => {
+  const qs = toQuery({ q: filters.q, category: filters.category });
+  return api.get<ClubView[]>(`/clubs${qs}`, {
     signal,
     mock: () => {
       svc();
@@ -72,6 +103,7 @@ export const listClubs = (filters: ClubFilters, viewer: Viewer, signal?: AbortSi
       );
     },
   });
+};
 
 /** GET /clubs/{id} — fiche, membres confirmés connus et événements à venir. */
 export const getClub = (id: string, viewer: Viewer, signal?: AbortSignal) =>
@@ -92,8 +124,8 @@ export const getClub = (id: string, viewer: Viewer, signal?: AbortSignal) =>
   });
 
 /** POST /clubs (administrateur) — publie ClubCréé. 409 si le nom existe déjà. */
-export const createClub = (input: ClubInput, viewer: Viewer) =>
-  api.post<Club>("/clubs", {
+export const createClub = async (input: ClubInput, viewer: Viewer) => {
+  const res = await api.post<Club>("/clubs", {
     body: input,
     mock: () => {
       adminOnly(viewer);
@@ -115,6 +147,9 @@ export const createClub = (input: ClubInput, viewer: Viewer) =>
       return clone(created);
     },
   });
+  publishDomainEvent(SERVICE, "ClubCréé", `${res.name} · ${res.category}`);
+  return res;
+};
 
 // ---------- Adhésions ----------
 
@@ -174,8 +209,8 @@ export const listMemberships = (viewer: Viewer, signal?: AbortSignal) =>
   });
 
 /** PUT /memberships/{id}/status (administrateur) — confirmer publie AdhésionConfirmée ; 409 si le club est complet. */
-export const decideMembership = (id: string, status: Exclude<MembershipStatus, "pending">, viewer: Viewer) =>
-  api.put<Membership>(`/memberships/${id}/status`, {
+export const decideMembership = async (id: string, status: Exclude<MembershipStatus, "pending">, viewer: Viewer) => {
+  const res = await api.put<Membership>(`/memberships/${id}/status`, {
     body: { status },
     mock: () => {
       adminOnly(viewer);
@@ -193,12 +228,18 @@ export const decideMembership = (id: string, status: Exclude<MembershipStatus, "
       return clone(m);
     },
   });
+  if (status === "confirmed") {
+    publishDomainEvent(SERVICE, "AdhésionConfirmée", `${res.memberName} · ${res.clubName}`);
+  }
+  return res;
+};
 
 // ---------- Événements ----------
 
 /** GET /events?clubId= — événements à venir, du plus proche au plus lointain. */
-export const listEvents = (filters: EventFilters, viewer: Viewer, signal?: AbortSignal) =>
-  api.get<CampusEvent[]>("/events", {
+export const listEvents = (filters: EventFilters, viewer: Viewer, signal?: AbortSignal) => {
+  const qs = toQuery({ clubId: filters.clubId });
+  return api.get<CampusEvent[]>(`/events${qs}`, {
     signal,
     mock: () => {
       svc();
@@ -211,6 +252,7 @@ export const listEvents = (filters: EventFilters, viewer: Viewer, signal?: Abort
       );
     },
   });
+};
 
 /** POST /events (administrateur) */
 export const createEvent = (input: EventInput, viewer: Viewer) =>
@@ -234,5 +276,164 @@ export const createEvent = (input: EventInput, viewer: Viewer) =>
       };
       db.events.push(created);
       return clone(created);
+    },
+  });
+
+
+// ---------- Admin: Supprimer un club ----------
+
+/** DELETE /clubs/{id} (administrateur) — supprime le club, ses adhésions et événements. */
+export const deleteClub = (clubId: string, viewer: Viewer) =>
+  api.delete<void>(`/clubs/${clubId}`, {
+    mock: () => {
+      adminOnly(viewer);
+      const idx = db.clubs.findIndex((c) => c.id === clubId);
+      if (idx === -1) throw new ApiError(404, "Club introuvable");
+      db.memberships = db.memberships.filter((m) => m.clubId !== clubId);
+      const eventIds = db.events.filter((e) => e.clubId === clubId).map((e) => e.id);
+      db.events = db.events.filter((e) => e.clubId !== clubId);
+      db.eventRegistrations = db.eventRegistrations.filter((r) => !eventIds.includes(r.eventId));
+      const clubName = db.clubs[idx].name;
+      db.clubs.splice(idx, 1);
+      publishDomainEvent(SERVICE, "ClubSupprimé", clubName);
+    },
+  });
+
+// ---------- Admin: Supprimer un événement ----------
+
+/** DELETE /events/{id} (administrateur) — supprime l'événement et ses inscriptions. */
+export const deleteEvent = (eventId: string, viewer: Viewer) =>
+  api.delete<void>(`/events/${eventId}`, {
+    mock: () => {
+      adminOnly(viewer);
+      const idx = db.events.findIndex((e) => e.id === eventId);
+      if (idx === -1) throw new ApiError(404, "Événement introuvable");
+      db.eventRegistrations = db.eventRegistrations.filter((r) => r.eventId !== eventId);
+      db.events.splice(idx, 1);
+    },
+  });
+
+// ---------- Admin: Lister les membres d'un club ----------
+
+/** GET /clubs/{id}/members (administrateur) — liste des membres. */
+export const listClubMembers = (clubId: string, viewer: Viewer, signal?: AbortSignal) =>
+  api.get<MemberDetail[]>(`/clubs/${clubId}/members`, {
+    signal,
+    mock: () => {
+      adminOnly(viewer);
+      clubById(clubId);
+      return clone(
+        db.memberships
+          .filter((m) => m.clubId === clubId)
+          .map((m) => ({
+            memberId: m.memberId,
+            memberName: m.memberName,
+            memberRole: m.memberRole,
+            status: m.status,
+            requestedAt: m.requestedAt,
+            decidedAt: m.decidedAt,
+          })),
+      );
+    },
+  });
+
+// ---------- Admin: Rapport annuel ----------
+
+/** GET /reports/clubs/{id}?year= (administrateur) — rapport annuel d'un club. */
+export const getClubReport = (clubId: string, year: number, viewer: Viewer, signal?: AbortSignal) =>
+  api.get<ClubReport>(`/reports/clubs/${clubId}?year=${year}`, {
+    signal,
+    mock: () => {
+      adminOnly(viewer);
+      const club = clubById(clubId);
+      const startDate = `${year}-01-01`;
+      const endDate = `${year}-12-31`;
+      const events = db.events.filter(
+        (e) => e.clubId === clubId && e.date >= startDate && e.date <= endDate,
+      );
+      const memberships = db.memberships.filter((m) => m.clubId === clubId);
+      return clone({
+        clubId: club.id,
+        clubName: club.name,
+        category: club.category,
+        year,
+        totalMembers: memberships.length,
+        confirmedMembers: memberships.filter((m) => m.status === "confirmed").length,
+        pendingMembers: memberships.filter((m) => m.status === "pending").length,
+        refusedMembers: memberships.filter((m) => m.status === "refused").length,
+        totalEvents: events.length,
+        events,
+        members: memberships.map((m) => ({
+          memberId: m.memberId,
+          memberName: m.memberName,
+          memberRole: m.memberRole,
+          status: m.status,
+          requestedAt: m.requestedAt,
+          decidedAt: m.decidedAt,
+        })),
+      });
+    },
+  });
+
+// ---------- Étudiant: Mes adhésions ----------
+
+/** GET /memberships/mine — adhésions de l'utilisateur courant. */
+export const listMyMemberships = (viewer: Viewer, signal?: AbortSignal) =>
+  api.get<Membership[]>("/memberships/mine", {
+    signal,
+    mock: () => {
+      svc();
+      if (!viewer.id) throw new ApiError(401, "Authentification requise");
+      return clone(db.memberships.filter((m) => m.memberId === viewer.id));
+    },
+  });
+
+// ---------- Étudiant: Inscription aux événements ----------
+
+/** POST /events/{id}/register — s'inscrire à un événement. */
+export const registerForEvent = (eventId: string, viewer: Viewer) =>
+  api.post<EventRegistration>(`/events/${eventId}/register`, {
+    mock: () => {
+      svc();
+      if (viewer.role === "admin") throw new ApiError(403, "Les administrateurs ne s'inscrivent pas aux événements");
+      const event = db.events.find((e) => e.id === eventId);
+      if (!event) throw new ApiError(404, "Événement introuvable");
+      if (event.date < todayISO()) throw new ApiError(409, "Cet événement est déjà passé");
+      if (db.eventRegistrations.some((r) => r.eventId === eventId && r.studentId === viewer.id)) {
+        throw new ApiError(409, "Vous êtes déjà inscrit à cet événement");
+      }
+      const reg: EventRegistration = {
+        id: `reg-${++db.seq}`,
+        eventId,
+        eventTitle: event.title,
+        studentId: viewer.id,
+        studentName: viewer.name,
+        registeredAt: db.now(),
+      };
+      db.eventRegistrations.push(reg);
+      return clone(reg);
+    },
+  });
+
+/** DELETE /events/{id}/register — se désinscrire d'un événement. */
+export const unregisterFromEvent = (eventId: string, viewer: Viewer) =>
+  api.delete<void>(`/events/${eventId}/register`, {
+    mock: () => {
+      svc();
+      const idx = db.eventRegistrations.findIndex(
+        (r) => r.eventId === eventId && r.studentId === viewer.id,
+      );
+      if (idx === -1) throw new ApiError(404, "Inscription introuvable");
+      db.eventRegistrations.splice(idx, 1);
+    },
+  });
+
+/** GET /events/my-registrations — inscriptions de l'utilisateur courant. */
+export const listMyRegistrations = (viewer: Viewer, signal?: AbortSignal) =>
+  api.get<EventRegistration[]>("/events/my-registrations", {
+    signal,
+    mock: () => {
+      svc();
+      return clone(db.eventRegistrations.filter((r) => r.studentId === viewer.id));
     },
   });

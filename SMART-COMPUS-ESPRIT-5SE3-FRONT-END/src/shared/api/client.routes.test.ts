@@ -16,7 +16,7 @@ describe("routage des appels API vers les microservices", () => {
     vi.stubEnv("VITE_LIBRARY_API_BASE_URL", "http://library.test");
     vi.stubEnv("VITE_RESIDENCES_API_BASE_URL", "http://residences.test/api");
     vi.stubEnv("VITE_STUDENT_LIFE_API_BASE_URL", "/svc/vie");
-    vi.stubEnv("VITE_REAL_API_PREFIXES", "/auth,/users,/clubs,/events,/memberships,/books,/chambres,/academic");
+    vi.stubEnv("VITE_REAL_API_PREFIXES", "/auth,/users,/clubs,/events,/memberships,/reports,/books,/chambres,/academic");
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -36,6 +36,8 @@ describe("routage des appels API vers les microservices", () => {
     ["/clubs/k1", "/svc/vie/clubs/k1"],
     ["/events", "/svc/vie/events"],
     ["/memberships/mine", "/svc/vie/memberships/mine"],
+    ["/events/my-registrations", "/svc/vie/events/my-registrations"],
+    ["/reports/clubs/k1?year=2026", "/svc/vie/reports/clubs/k1?year=2026"],
     ["/users", "/svc/user/users"],
     ["/books", "http://library.test/books"],
     ["/chambres", "http://residences.test/api/chambres"],
