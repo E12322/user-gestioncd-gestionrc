@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { Button } from "@/shared/components/ui/button";
 import { isApiError } from "@/shared/api/errors";
 import { useMutation } from "@/shared/api/useMutation";
-import { ROLES, ROLE_LABEL } from "@/shared/auth/roles";
 import { useT } from "@/shared/i18n";
 import { focusFirstInvalid, INSTITUTIONAL_DOMAIN, MAX_ATTEMPTS } from "../../utils/validation";
 import { login } from "../api.mock";
@@ -64,22 +63,6 @@ export default function LoginPage() {
     <AuthShell
       title={t("users.login.title")}
       description={t("users.login.description")}
-      footer={
-        <section aria-labelledby="demo-login" className="rounded-xl border border-dashed border-amber-400 bg-amber-50 p-4">
-          <h2 id="demo-login" className="text-sm font-semibold text-amber-950">
-            {t("users.login.demo")}
-          </h2>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {ROLES.map((r) => (
-              <Button key={r} type="button" size="sm" variant="outline" className="bg-white" disabled title={t("users.login.demoDisabled")}>
-                {t(ROLE_LABEL[r])}
-              </Button>
-            ))}
-          </div>
-          <p className="mt-3 text-xs text-amber-950">{t("users.login.demoDisabled")}</p>
-          <p className="text-xs text-amber-950">{t("users.login.demoReal")}</p>
-        </section>
-      }
     >
       <form ref={formRef} onSubmit={(e) => void submit(e)} noValidate method="post" className="space-y-1">
         {failure?.kind === "attempts" && (
