@@ -11,6 +11,7 @@ Projet académique d'architecture microservices - ESPRIT 5SE3 (2026).
 - **Lancer, tester, dépanner** : [`docs/GUIDE-LANCEMENT-ET-TESTS.md`](docs/GUIDE-LANCEMENT-ET-TESTS.md)
 - **Document technique et questions du jury** : [`docs/DOCUMENT-TECHNIQUE-JURY.md`](docs/DOCUMENT-TECHNIQUE-JURY.md)
 - **Assistant IA (construction, sécurité, questions)** : [`docs/DOCUMENT-AGENT-IA.md`](docs/DOCUMENT-AGENT-IA.md)
+- **Questions et réponses sur l'agent IA (« comment l'avez-vous fait ? »)** : [`docs/QUESTIONS-AGENT-IA.md`](docs/QUESTIONS-AGENT-IA.md)
 - **Mise en ligne gratuite** : [`docs/DEPLOIEMENT.md`](docs/DEPLOIEMENT.md)
 
 ---
